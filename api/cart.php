@@ -125,4 +125,4 @@ switch ($action) {
     default:
         echo json_encode(['error' => 'Invalid action']);
 }
-?>
+

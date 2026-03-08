@@ -1,3 +1,4 @@
+
 <?php
 
 if(session_status() === PHP_SESSION_NONE){
@@ -23,19 +24,19 @@ function getDB(){
 
         try{
 
-        $pdo = new PDO(
-            "mysql:host=".DB_HOST.";dbname=".DB_NAME.";charset=utf8mb4",
-            DB_USER,
-            DB_PASS,
-            [
-                PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC
-            ]
-        );
+            $pdo = new PDO(
+                "mysql:host=".DB_HOST.";dbname=".DB_NAME.";charset=utf8mb4",
+                DB_USER,
+                DB_PASS,
+                [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+                ]
+            );
 
         }catch(PDOException $e){
 
-        die("Error conexión DB: ".$e->getMessage());
+            die("Error conexión DB: ".$e->getMessage());
 
         }
 
@@ -64,6 +65,22 @@ function isAdmin(){
     return isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
 }
 
+/* NUEVA FUNCIÓN PARA PROTEGER PANEL ADMIN */
+
+function requireAdmin(){
+
+    if(!isset($_SESSION['user_id'])){
+        header("Location: ../login.php");
+        exit;
+    }
+
+    if(!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin'){
+        echo "Acceso solo para administradores";
+        exit;
+    }
+
+}
+
 function generateOrderNumber(){
     return "BC".date("Ymd").rand(1000,9999);
 }
@@ -81,31 +98,31 @@ define('TELEGRAM_CHAT_ID','-1003203782708');
 
 function sendTelegramMessage($message){
 
-$token = TELEGRAM_BOT_TOKEN;
-$chat_id = TELEGRAM_CHAT_ID;
+    $token = TELEGRAM_BOT_TOKEN;
+    $chat_id = TELEGRAM_CHAT_ID;
 
-$url = "https://api.telegram.org/bot".$token."/sendMessage";
+    $url = "https://api.telegram.org/bot".$token."/sendMessage";
 
-$data = [
-'chat_id' => $chat_id,
-'text' => $message
-];
+    $data = [
+        'chat_id' => $chat_id,
+        'text' => $message
+    ];
 
-$options = [
-'http' => [
-'header'  => "Content-type: application/x-www-form-urlencoded\r\n",
-'method'  => 'POST',
-'content' => http_build_query($data),
-'timeout' => 10
-]
-];
+    $options = [
+        'http' => [
+            'header'  => "Content-type: application/x-www-form-urlencoded\r\n",
+            'method'  => 'POST',
+            'content' => http_build_query($data),
+            'timeout' => 10
+        ]
+    ];
 
-$context = stream_context_create($options);
+    $context = stream_context_create($options);
 
-/* el @ evita que errores de telegram rompan la tienda */
+    /* el @ evita que errores de telegram rompan la tienda */
+    $result = @file_get_contents($url,false,$context);
 
-$result = @file_get_contents($url,false,$context);
-
-return $result;
+    return $result;
 
 }
+
