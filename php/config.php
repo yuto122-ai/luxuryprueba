@@ -13,7 +13,7 @@ BASE DE DATOS
 
 define('DB_HOST','localhost');
 define('DB_USER','root');
-define('DB_PASS','');
+define('DB_PASS','password_segura');
 define('DB_NAME','black_clothes');
 
 function getDB(){
