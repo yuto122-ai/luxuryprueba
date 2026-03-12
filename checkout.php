@@ -16,7 +16,7 @@
         .order-type-btn {
             flex:1; padding:16px; background:none; border:1px solid rgba(255,255,255,.1);
             color:var(--gray); font-family:var(--font-sans); font-size:.72rem; letter-spacing:.15em;
-            text-transform:uppercase; cursor:none; transition:var(--transition); text-align:center;
+            text-transform:uppercase; cursor:pointer; transition:var(--transition); text-align:center;
         }
         .order-type-btn.active { border-color:var(--gold); color:var(--gold); background:rgba(201,168,76,.06); }
         @media(max-width:900px) { .checkout-grid { grid-template-columns:1fr; } }

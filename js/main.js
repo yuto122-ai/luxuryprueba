@@ -194,128 +194,31 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // ====== 360 VIEWER ======
-    window.open360Viewer = function(productId) {
-        fetch(`api/product360.php?id=${productId}`)
+    // open360Viewer es sobreescrito por index.php con PRODUCTS_DATA (mas eficiente, sin fetch)
+    // Este es el fallback para paginas que no tienen PRODUCTS_DATA
+    window.open360Viewer = window.open360Viewer || function(productId) {
+        fetch('api/product360.php?id=' + productId)
             .then(r => r.json())
-            .then(data => {
-                if (!data.product) return;
-                initViewer(data);
-            });
+            .then(data => { if (data.product) console.log('viewer fallback:', data); });
     };
 
-    function initViewer(data) {
-        const viewer = document.getElementById('viewer-360');
-        if (!viewer) return;
-        viewer.classList.add('active');
-        document.body.style.overflow = 'hidden';
-
-        const product = data.product;
-        const images = data.images && data.images.length > 0 ? data.images : ['assets/placeholder.jpg'];
-
-        viewer.querySelector('#viewer-title').textContent = product.name;
-        viewer.querySelector('#viewer-desc').textContent = product.description;
-        viewer.querySelector('#viewer-price').textContent = product.price_individual
-            ? '$' + parseFloat(product.price_individual).toFixed(2)
-            : '$' + parseFloat(product.price_wholesale).toFixed(2);
-        viewer.querySelector('#viewer-material').textContent = product.material === 'cotton' ? '100% Algodón' : product.material === 'polyester' ? '100% Poliéster' : 'Mixto';
-
-        // Sizes
-        const sizesContainer = viewer.querySelector('#viewer-sizes');
-        const variants = data.variants || [];
-        sizesContainer.innerHTML = variants.map(v => `
-            <button class="size-btn" 
-                onclick="selectSize(this, ${v.id})" 
-                data-stock="${v.stock}"
-                ${v.stock === 0 ? 'disabled style="opacity:.3"' : ''}>
-                ${v.size}
-            </button>
-        `).join('');
-
-        // 360 Image rotation logic
-        const canvas = viewer.querySelector('#viewer-canvas');
-        const img = viewer.querySelector('#viewer-image');
-        let currentFrame = 0;
-        let isDragging = false, startX = 0, lastX = 0;
-        const totalFrames = images.length;
-
-        if (images.length > 0) {
-            img.src = images[0];
-        }
-
-        function setFrame(f) {
-            currentFrame = ((f % totalFrames) + totalFrames) % totalFrames;
-            img.style.opacity = '0.7';
-            img.src = images[currentFrame];
-            img.onload = () => { img.style.opacity = '1'; };
-        }
-
-        canvas.onmousedown = e => { isDragging = true; startX = e.clientX; canvas.style.cursor = 'grabbing'; };
-        canvas.onmousemove = e => {
-            if (!isDragging) return;
-            const diff = e.clientX - lastX;
-            if (Math.abs(diff) > 20) {
-                setFrame(currentFrame + (diff > 0 ? -1 : 1));
-                lastX = e.clientX;
-            }
-            lastX = lastX || e.clientX;
-        };
-        canvas.onmouseup = () => { isDragging = false; canvas.style.cursor = 'ew-resize'; lastX = 0; };
-        canvas.onmouseleave = () => { isDragging = false; lastX = 0; };
-
-        // Touch support
-        canvas.ontouchstart = e => { isDragging = true; startX = e.touches[0].clientX; lastX = startX; };
-        canvas.ontouchmove = e => {
-            if (!isDragging) return;
-            const diff = e.touches[0].clientX - lastX;
-            if (Math.abs(diff) > 15) {
-                setFrame(currentFrame + (diff > 0 ? -1 : 1));
-                lastX = e.touches[0].clientX;
-            }
-        };
-        canvas.ontouchend = () => { isDragging = false; };
-
-        // Auto-rotate hint animation
-        if (totalFrames > 1) {
-            let autoFrame = 0;
-            const autoInterval = setInterval(() => {
-                if (!isDragging) setFrame(++autoFrame);
-                if (autoFrame >= 3) clearInterval(autoInterval);
-            }, 300);
-        }
-
-        viewer.querySelector('#viewer-add-cart').onclick = () => {
-            const selectedSize = viewer.querySelector('.size-btn.active');
-            const variantId = selectedSize ? selectedSize.dataset.variantId : null;
-            if (variants.length > 0 && !selectedSize) {
-                showToast('Selecciona una talla', 'error');
-                return;
-            }
-            addToCart(product.id, variantId);
-            close360Viewer();
-        };
-    }
-
+    // close360Viewer: usado por index.php y el boton cerrar
     window.close360Viewer = function() {
         const viewer = document.getElementById('viewer-360');
         if (viewer) viewer.classList.remove('active');
         document.body.style.overflow = '';
     };
 
-    window.selectSize = function(btn, variantId) {
-        document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        btn.dataset.variantId = variantId;
-    };
-
-    // Close viewer on overlay click
+    // Cerrar viewer solo si el click fue DIRECTAMENTE en el fondo negro (viewer-360)
+    // NOT en viewer-container ni en ningun hijo
     const viewer360 = document.getElementById('viewer-360');
     if (viewer360) {
-        viewer360.addEventListener('click', e => {
-            if (e.target === viewer360) close360Viewer();
+        viewer360.addEventListener('click', function(e) {
+            if (e.target === viewer360) window.close360Viewer();
         });
     }
 
-    // ====== TOAST NOTIFICATIONS ======
+        // ====== TOAST NOTIFICATIONS ======
     window.showToast = function(message, type = 'info') {
         const existing = document.querySelector('.toast');
         if (existing) existing.remove();
