@@ -1,0 +1,12 @@
+Options -MultiViews
+RewriteEngine On
+
+# Canonicaliza: /archivo.php -> /archivo
+RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$ [NC]
+RewriteCond %{THE_REQUEST} \s/+(.+?)\.php(?:[\s?]|$) [NC]
+RewriteRule ^ /%1 [R=301,L,NE]
+
+# Sirve extensionless: /archivo -> /archivo.php
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^(.+?)/?$ $1.php [L,QSA]
