@@ -159,7 +159,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ====== SCROLL REVEAL ======
     const reveals = document.querySelectorAll('.reveal');
-    if ('IntersectionObserver' in window) {
+    if (isTouchLike) {
+        // On some mobile browsers, IntersectionObserver + animated hidden state can fail,
+        // leaving sections invisible but still clickable.
+        reveals.forEach(el => el.classList.add('visible'));
+    } else if ('IntersectionObserver' in window) {
         const revealObserver = new IntersectionObserver(entries => {
             entries.forEach(e => {
                 if (e.isIntersecting) {
