@@ -2,6 +2,9 @@
 
 document.addEventListener('DOMContentLoaded', () => {
 
+    // Enable progressive-enhancement styles only when JS actually runs.
+    document.documentElement.classList.add('js');
+
     // ====== PAGE LOADER ======
     const loader = document.querySelector('.page-loader');
     if (loader) {
@@ -156,15 +159,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ====== SCROLL REVEAL ======
     const reveals = document.querySelectorAll('.reveal');
-    const revealObserver = new IntersectionObserver(entries => {
-        entries.forEach(e => {
-            if (e.isIntersecting) {
-                e.target.classList.add('visible');
-                revealObserver.unobserve(e.target);
-            }
-        });
-    }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
-    reveals.forEach(el => revealObserver.observe(el));
+    if ('IntersectionObserver' in window) {
+        const revealObserver = new IntersectionObserver(entries => {
+            entries.forEach(e => {
+                if (e.isIntersecting) {
+                    e.target.classList.add('visible');
+                    revealObserver.unobserve(e.target);
+                }
+            });
+        }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+        reveals.forEach(el => revealObserver.observe(el));
+    } else {
+        // Older mobile browsers: show content immediately instead of leaving it hidden.
+        reveals.forEach(el => el.classList.add('visible'));
+    }
 
     // ====== AUTH TABS ======
     const tabs = document.querySelectorAll('.auth-tab');
