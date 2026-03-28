@@ -1,6 +1,9 @@
 <?php 
 require_once 'php/config.php';
 
+$cssVersion = @filemtime(__DIR__ . '/css/style.css') ?: time();
+$jsVersion  = @filemtime(__DIR__ . '/js/main.js') ?: time();
+
 $db = getDB();
 $allProds = $db->query("
     SELECT p.id, p.name, p.description, p.material, p.price_individual, p.price_wholesale, 
@@ -62,7 +65,7 @@ $colors = $allColors;
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BLACK CLOTHES</title>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=<?= $cssVersion ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         .material-tabs{display:flex;gap:16px;margin-bottom:40px;flex-wrap:wrap}
@@ -391,7 +394,7 @@ $colors = $allColors;
     </div>
 </footer>
 
-<script src="js/main.js"></script>
+<script src="js/main.js?v=<?= $jsVersion ?>"></script>
 <script>
 // ─────────────────────────────────────────────────────────────────────────────
 // OVERRIDE de open360Viewer: main.js define su propia versión que sobreescribe
