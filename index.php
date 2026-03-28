@@ -293,7 +293,7 @@ $colors = $allColors;
         $stmt = $db->prepare("SELECT p.*,(SELECT image_path FROM product_images WHERE product_id=p.id AND is_main=1 LIMIT 1) as main_image FROM products p WHERE p.sale_type IN ('wholesale','both') AND p.active=1 ORDER BY p.featured DESC,p.id");
         $stmt->execute(); $wholesaleProducts = $stmt->fetchAll();
         ?>
-        <div class="pack-grid reveal">
+        <div class="pack-grid">
             <?php foreach($wholesaleProducts as $prod): ?>
             <?php $img=$prod['main_image']?'uploads/products/'.$prod['main_image']:'assets/placeholder.jpg'; ?>
             <div class="wholesale-pack-card">
@@ -335,7 +335,7 @@ $colors = $allColors;
     $stmt=$db->prepare("SELECT p.*,(SELECT image_path FROM product_images WHERE product_id=p.id AND is_main=1 LIMIT 1) as main_image FROM products p WHERE p.sale_type IN ('individual','both') AND p.active=1 ORDER BY p.featured DESC,p.id");
     $stmt->execute(); $individualProducts=$stmt->fetchAll();
     ?>
-    <div class="products-grid reveal" id="products-grid">
+    <div class="products-grid" id="products-grid">
         <?php foreach($individualProducts as $prod): ?>
         <?php $img=$prod['main_image']?'uploads/products/'.$prod['main_image']:'assets/placeholder.jpg'; ?>
         <div class="product-card" data-material="<?= $prod['material'] ?>" data-featured="<?= $prod['featured']?'true':'false' ?>">
