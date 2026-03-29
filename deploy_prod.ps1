@@ -51,12 +51,20 @@ php -r \"require '$RemotePath/php/config.php'; getDB(); echo 'DB_OK\\n';\"
 git log --oneline -n 1
 "@
 
+$remoteScript = $remoteScript -replace "`r`n", "`n"
+
 $remoteScriptB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($remoteScript))
 $remoteCommand = "echo $remoteScriptB64 | base64 -d | bash"
 
-& $plinkPath -ssh "$User@$ServerHost" -P $Port $remoteCommand
+$deployOutput = & $plinkPath -ssh "$User@$ServerHost" -P $Port $remoteCommand 2>&1
+$deployOutput | ForEach-Object { Write-Host $_ }
+
 if ($LASTEXITCODE -ne 0) {
     throw "Fallo el despliegue remoto."
+}
+
+if ((($deployOutput | Out-String) -notmatch "DB_OK")) {
+    throw "Deploy remoto sin confirmacion DB_OK. Revisa salida del servidor."
 }
 
 Write-Host "[4/4] Despliegue completado correctamente."
