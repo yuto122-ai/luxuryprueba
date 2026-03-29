@@ -140,23 +140,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
-                // Crea/actualiza incluso en bases viejas sin UNIQUE(product_id,color_id).
+                // Crea/actualiza el precio e imagen de este color para el producto.
+                // Algunas bases viejas no tienen UNIQUE(product_id,color_id), así que evitamos ON DUPLICATE.
                 $existingStmt = $db->prepare("SELECT id FROM product_colors WHERE product_id = ? AND color_id = ? ORDER BY id DESC LIMIT 1");
                 $existingStmt->execute([$productId, $colorId]);
                 $existingId = $existingStmt->fetchColumn();
 
                 if ($existingId) {
-                    $db->prepare("UPDATE product_colors
-                        SET extra_price = ?, image_path = COALESCE(?, image_path)
-                        WHERE id = ?")
-                       ->execute([$extra, $imagePath, $existingId]);
+                    $db->prepare("UPDATE product_colors SET extra_price = ?, image_path = COALESCE(?, image_path) WHERE id = ?")
+                        ->execute([$extra, $imagePath, $existingId]);
 
-                    // Limpieza de historico duplicado para no romper seleccion de color.
+                    // Mantiene solo la fila más reciente para ese color.
                     $db->prepare("DELETE FROM product_colors WHERE product_id = ? AND color_id = ? AND id <> ?")
-                       ->execute([$productId, $colorId, $existingId]);
+                        ->execute([$productId, $colorId, $existingId]);
                 } else {
                     $db->prepare("INSERT INTO product_colors (product_id, color_id, extra_price, image_path) VALUES (?,?,?,?)")
-                       ->execute([$productId, $colorId, $extra, $imagePath]);
+                        ->execute([$productId, $colorId, $extra, $imagePath]);
                 }
             }
 
