@@ -26,7 +26,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $categoryId      = (int)($_POST['category_id'] ?? 1);
         $maxPrice        = 999999999; // safe cap, ajustar si quieres mensaje de límite
         $selectedSizes   = isset($_POST['sizes']) ? (array)$_POST['sizes'] : [];
-        $sizePrices      = $_POST['size_prices'] ?? [];
+        $sizePricesRetail    = $_POST['size_prices_individual'] ?? [];
+        $sizePricesWholesale = $_POST['size_prices_wholesale'] ?? [];
         $color           = sanitize($_POST['color']);
         $colorModifier   = (float)($_POST['color_price_modifier'] ?? 0);
         $error    = false;
@@ -88,9 +89,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $db->prepare("DELETE FROM product_variants WHERE product_id = ?")->execute([$id]);
                 foreach ($selectedSizes as $sz) {
                     if (in_array($sz, ['XS','S','M','L','XL','XXL','XXXL'])) {
-                        $price = (float)($sizePrices[$sz] ?? 0);
-                        $db->prepare("INSERT INTO product_variants (product_id, size, price, stock) VALUES (?,?,?,?)")
-                           ->execute([$id, $sz, $price, 0]);
+                        $priceIndividual = (float)($sizePricesRetail[$sz] ?? 0);
+                        $priceWholesale  = (float)($sizePricesWholesale[$sz] ?? 0);
+                        $legacyPrice = $priceIndividual > 0 ? $priceIndividual : $priceWholesale;
+                        $db->prepare("INSERT INTO product_variants (product_id, size, price, price_individual, price_wholesale, stock) VALUES (?,?,?,?,?,?)")
+                           ->execute([$id, $sz, $legacyPrice, $priceIndividual, $priceWholesale, 0]);
                     }
                 }
 
@@ -108,9 +111,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 foreach ($selectedSizes as $sz) {
                     if (in_array($sz, ['XS','S','M','L','XL','XXL','XXXL'])) {
-                        $price = (float)($sizePrices[$sz] ?? 0);
-                        $db->prepare("INSERT INTO product_variants (product_id, size, price, stock) VALUES (?,?,?,?)")
-                           ->execute([$newId, $sz, $price, 0]);
+                        $priceIndividual = (float)($sizePricesRetail[$sz] ?? 0);
+                        $priceWholesale  = (float)($sizePricesWholesale[$sz] ?? 0);
+                        $legacyPrice = $priceIndividual > 0 ? $priceIndividual : $priceWholesale;
+                        $db->prepare("INSERT INTO product_variants (product_id, size, price, price_individual, price_wholesale, stock) VALUES (?,?,?,?,?,?)")
+                           ->execute([$newId, $sz, $legacyPrice, $priceIndividual, $priceWholesale, 0]);
                     }
                 }
 
@@ -120,11 +125,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             // --- Guardar colores por producto ---
-            $colorExtras = $_POST['color_extras'] ?? [];
+            $colorExtrasRetail = $_POST['color_extras_individual'] ?? [];
+            $colorExtrasWholesale = $_POST['color_extras_wholesale'] ?? [];
             $colorImages = $_FILES['color_images'] ?? ['name'=>[],'tmp_name'=>[]];
             foreach ($allColors as $c) {
                 $colorId = $c['id'];
-                $extra = isset($colorExtras[$colorId]) && $colorExtras[$colorId] !== '' ? (float)$colorExtras[$colorId] : 0;
+                $extraRetail = isset($colorExtrasRetail[$colorId]) && $colorExtrasRetail[$colorId] !== '' ? (float)$colorExtrasRetail[$colorId] : 0;
+                $extraWholesale = isset($colorExtrasWholesale[$colorId]) && $colorExtrasWholesale[$colorId] !== '' ? (float)$colorExtrasWholesale[$colorId] : 0;
+                $legacyExtra = $extraRetail > 0 ? $extraRetail : $extraWholesale;
                 $imagePath = null;
 
                 if (!empty($colorImages['name'][$colorId])) {
@@ -147,15 +155,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $existingId = $existingStmt->fetchColumn();
 
                 if ($existingId) {
-                    $db->prepare("UPDATE product_colors SET extra_price = ?, image_path = COALESCE(?, image_path) WHERE id = ?")
-                        ->execute([$extra, $imagePath, $existingId]);
+                    $db->prepare("UPDATE product_colors
+                        SET extra_price = ?, extra_price_individual = ?, extra_price_wholesale = ?,
+                            image_path = COALESCE(?, image_path)
+                        WHERE id = ?")
+                        ->execute([$legacyExtra, $extraRetail, $extraWholesale, $imagePath, $existingId]);
 
                     // Mantiene solo la fila más reciente para ese color.
                     $db->prepare("DELETE FROM product_colors WHERE product_id = ? AND color_id = ? AND id <> ?")
                         ->execute([$productId, $colorId, $existingId]);
                 } else {
-                    $db->prepare("INSERT INTO product_colors (product_id, color_id, extra_price, image_path) VALUES (?,?,?,?)")
-                        ->execute([$productId, $colorId, $extra, $imagePath]);
+                    $db->prepare("INSERT INTO product_colors
+                        (product_id, color_id, extra_price, extra_price_individual, extra_price_wholesale, image_path)
+                        VALUES (?,?,?,?,?,?)")
+                        ->execute([$productId, $colorId, $legacyExtra, $extraRetail, $extraWholesale, $imagePath]);
                 }
             }
 
@@ -174,7 +187,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ── GET PRODUCT FOR EDIT ──────────────────────────────────────────────────────
 $editProduct = null;
 $editSizes   = [];
-$editSizePrices = [];
+$editSizePricesRetail = [];
+$editSizePricesWholesale = [];
 $colorMap = [];
 if ($action === 'edit' && isset($_GET['id'])) {
     $stmt = $db->prepare("SELECT * FROM products WHERE id = ?");
@@ -186,11 +200,13 @@ if ($action === 'edit' && isset($_GET['id'])) {
         $vstmt->execute([$editProduct['id']]);
         $editSizes = $vstmt->fetchAll(PDO::FETCH_COLUMN);
 
-        $pstmt = $db->prepare("SELECT size, price FROM product_variants WHERE product_id = ?");
+        $pstmt = $db->prepare("SELECT size, price, price_individual, price_wholesale FROM product_variants WHERE product_id = ?");
         $pstmt->execute([$editProduct['id']]);
         $variants = $pstmt->fetchAll(PDO::FETCH_ASSOC);
         foreach ($variants as $v) {
-            $editSizePrices[$v['size']] = $v['price'];
+            $legacyPrice = (float)($v['price'] ?? 0);
+            $editSizePricesRetail[$v['size']] = (float)($v['price_individual'] ?? $legacyPrice);
+            $editSizePricesWholesale[$v['size']] = (float)($v['price_wholesale'] ?? $legacyPrice);
         }
 
         $colorMap = [];
@@ -292,6 +308,20 @@ $categories = $db->query("SELECT * FROM categories ORDER BY id")->fetchAll();
             overflow-y: auto;
             max-height: 100vh;
         }
+        .mode-switch { display:flex; gap:10px; margin-bottom:14px; }
+        .mode-btn {
+            border:1px solid rgba(255,255,255,.12);
+            background:transparent;
+            color:var(--gray-light);
+            padding:10px 14px;
+            font-size:.68rem;
+            letter-spacing:.14em;
+            text-transform:uppercase;
+            cursor:pointer;
+        }
+        .mode-btn.active { border-color:var(--gold); color:var(--gold); background:rgba(201,168,76,.12); }
+        .mode-field.hidden { display:none; }
+        .color-row { border:1px solid rgba(255,255,255,.08); padding:12px; margin-bottom:10px; }
     </style>
 </head>
 <body>
@@ -451,19 +481,62 @@ $categories = $db->query("SELECT * FROM categories ORDER BY id")->fetchAll();
                 </p>
             </div>
 
+            <div class="mode-switch" id="size-mode-switch">
+                <button type="button" class="mode-btn active" data-mode="individual">Menudeo</button>
+                <button type="button" class="mode-btn" data-mode="wholesale">Mayoreo</button>
+            </div>
+            <label class="toggle-switch" style="margin-bottom:10px">
+                <input type="checkbox" id="sync-size-prices" style="width:18px;height:18px;accent-color:var(--gold)">
+                <span style="font-size:.72rem;color:var(--gray)">Aplicar el mismo precio de talla en ambos modos</span>
+            </label>
             <div id="size-prices" style="margin-bottom:24px"></div>
 
             <div style="margin-bottom:24px">
                 <label class="form-label">Precios por color</label>
+                <div class="mode-switch" id="color-mode-switch" style="margin-top:10px">
+                    <button type="button" class="mode-btn active" data-mode="individual">Menudeo</button>
+                    <button type="button" class="mode-btn" data-mode="wholesale">Mayoreo</button>
+                </div>
+                <label class="toggle-switch" style="margin-bottom:10px">
+                    <input type="checkbox" id="sync-color-prices" style="width:18px;height:18px;accent-color:var(--gold)">
+                    <span style="font-size:.72rem;color:var(--gray)">Aplicar el mismo precio por color en ambos modos</span>
+                </label>
                 <?php foreach ($allColors as $c): ?>
-                <?php $pc = $colorMap[$c['id']] ?? ['extra_price' => 0, 'image_path' => '']; ?>
-                <div class="form-group" style="margin-bottom:12px">
+                <?php $pc = $colorMap[$c['id']] ?? ['extra_price' => 0, 'extra_price_individual' => 0, 'extra_price_wholesale' => 0, 'image_path' => '']; ?>
+                <?php
+                    $legacyExtra = (float)($pc['extra_price'] ?? 0);
+                    $extraRetail = (float)($pc['extra_price_individual'] ?? $legacyExtra);
+                    $extraWholesale = (float)($pc['extra_price_wholesale'] ?? $legacyExtra);
+                ?>
+                <div class="form-group color-row">
                     <div style="display:flex;align-items:center;gap:10px">
                         <span style="width:14px;height:14px;border-radius:50%;background:<?= htmlspecialchars($c['hex']) ?>;border:1px solid #ccc"></span>
                         <strong style="color:var(--white)"><?= htmlspecialchars($c['name']) ?></strong>
                     </div>
-                    <div style="display:grid;grid-template-columns:150px 1fr;gap:10px;align-items:center;margin-top:8px">
-                        <input type="number" step="0.01" min="0" name="color_extras[<?= $c['id'] ?>]" class="form-input" placeholder="Extra precio" value="<?= htmlspecialchars($pc['extra_price']) ?>">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:center;margin-top:8px">
+                        <div class="mode-field color-mode-field-individual">
+                            <label class="form-label" style="font-size:.62rem">Extra Menudeo ($)</label>
+                            <input type="number" step="0.01" min="0" name="color_extras_individual[<?= $c['id'] ?>]" class="form-input" value="<?= htmlspecialchars($extraRetail) ?>">
+                        </div>
+                        <div class="mode-field color-mode-field-wholesale hidden">
+                            <label class="form-label" style="font-size:.62rem">Extra Mayoreo ($)</label>
+                            <input type="number" step="0.01" min="0" name="color_extras_wholesale[<?= $c['id'] ?>]" class="form-input" value="<?= htmlspecialchars($extraWholesale) ?>">
+                        </div>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+
+            <div style="margin-bottom:24px">
+                <label class="form-label">Imágenes por color</label>
+                <?php foreach ($allColors as $c): ?>
+                <?php $pc = $colorMap[$c['id']] ?? ['image_path' => '']; ?>
+                <div class="form-group color-row">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="width:14px;height:14px;border-radius:50%;background:<?= htmlspecialchars($c['hex']) ?>;border:1px solid #ccc"></span>
+                        <strong style="color:var(--white)"><?= htmlspecialchars($c['name']) ?></strong>
+                    </div>
+                    <div style="margin-top:8px">
                         <input type="file" name="color_images[<?= $c['id'] ?>]" class="form-input" accept="image/*">
                     </div>
                     <?php if (!empty($pc['image_path'])): ?>
@@ -606,23 +679,116 @@ function toggleSizeBtn(div) {
 function updateSizePrices() {
     const container = document.getElementById('size-prices');
     const checked = document.querySelectorAll('input[name="sizes[]"]:checked');
-    const editPrices = <?= json_encode($editSizePrices) ?>;
+    const editRetail = <?= json_encode($editSizePricesRetail) ?>;
+    const editWholesale = <?= json_encode($editSizePricesWholesale) ?>;
+    const activeMode = document.body.dataset.sizeMode || 'individual';
+
+    const currentRetail = {};
+    const currentWholesale = {};
+    container.querySelectorAll('.size-price-individual').forEach(input => {
+        currentRetail[input.dataset.size] = input.value;
+    });
+    container.querySelectorAll('.size-price-wholesale').forEach(input => {
+        currentWholesale[input.dataset.size] = input.value;
+    });
+
     container.innerHTML = '';
     checked.forEach(cb => {
         const sz = cb.value;
-        const value = editPrices[sz] || 0;
+        const retailValue = currentRetail[sz] ?? editRetail[sz] ?? 0;
+        const wholesaleValue = currentWholesale[sz] ?? editWholesale[sz] ?? 0;
         const div = document.createElement('div');
         div.className = 'form-group';
         div.innerHTML = `
             <label class="form-label">Precio adicional para ${sz} ($)</label>
-            <input type="number" name="size_prices[${sz}]" class="form-input" step="0.01" min="0" value="${value}">
+            <div class="mode-field size-mode-field-individual ${activeMode === 'individual' ? '' : 'hidden'}">
+                <input type="number" name="size_prices_individual[${sz}]" class="form-input size-price-individual" step="0.01" min="0" value="${retailValue}" data-size="${sz}">
+            </div>
+            <div class="mode-field size-mode-field-wholesale ${activeMode === 'wholesale' ? '' : 'hidden'}" style="margin-top:8px">
+                <input type="number" name="size_prices_wholesale[${sz}]" class="form-input size-price-wholesale" step="0.01" min="0" value="${wholesaleValue}" data-size="${sz}">
+            </div>
         `;
         container.appendChild(div);
     });
+
+    bindPriceSyncHandlers();
 }
 
 (function () {
     updateSizePrices();
+})();
+
+function setModeVisibility(rootId, mode) {
+    const root = document.getElementById(rootId);
+    if (!root) return;
+    root.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+
+    const form = document.querySelector('.product-form');
+    if (!form) return;
+
+    if (rootId === 'size-mode-switch') {
+        document.body.dataset.sizeMode = mode;
+        updateSizePrices();
+    } else if (rootId === 'color-mode-switch') {
+        form.querySelectorAll('.color-mode-field-individual').forEach(el => el.classList.toggle('hidden', mode !== 'individual'));
+        form.querySelectorAll('.color-mode-field-wholesale').forEach(el => el.classList.toggle('hidden', mode !== 'wholesale'));
+    }
+}
+
+function bindModeSwitchers() {
+    ['size-mode-switch', 'color-mode-switch'].forEach(rootId => {
+        const root = document.getElementById(rootId);
+        if (!root) return;
+        root.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => setModeVisibility(rootId, btn.dataset.mode));
+        });
+    });
+}
+
+function bindPriceSyncHandlers() {
+    const syncSizes = document.getElementById('sync-size-prices');
+    const syncColors = document.getElementById('sync-color-prices');
+
+    document.querySelectorAll('.size-price-individual').forEach(input => {
+        input.oninput = () => {
+            if (!syncSizes || !syncSizes.checked) return;
+            const pair = document.querySelector(`.size-price-wholesale[data-size="${input.dataset.size}"]`);
+            if (pair) pair.value = input.value;
+        };
+    });
+    document.querySelectorAll('.size-price-wholesale').forEach(input => {
+        input.oninput = () => {
+            if (!syncSizes || !syncSizes.checked) return;
+            const pair = document.querySelector(`.size-price-individual[data-size="${input.dataset.size}"]`);
+            if (pair) pair.value = input.value;
+        };
+    });
+
+    document.querySelectorAll('input[name^="color_extras_individual"]').forEach(input => {
+        input.oninput = () => {
+            if (!syncColors || !syncColors.checked) return;
+            const name = input.name.replace('color_extras_individual', 'color_extras_wholesale');
+            const pair = document.querySelector(`input[name="${name}"]`);
+            if (pair) pair.value = input.value;
+        };
+    });
+    document.querySelectorAll('input[name^="color_extras_wholesale"]').forEach(input => {
+        input.oninput = () => {
+            if (!syncColors || !syncColors.checked) return;
+            const name = input.name.replace('color_extras_wholesale', 'color_extras_individual');
+            const pair = document.querySelector(`input[name="${name}"]`);
+            if (pair) pair.value = input.value;
+        };
+    });
+}
+
+(function () {
+    document.body.dataset.sizeMode = 'individual';
+    bindModeSwitchers();
+    setModeVisibility('color-mode-switch', 'individual');
+    bindPriceSyncHandlers();
 })();
 
 function togglePrices(type) {

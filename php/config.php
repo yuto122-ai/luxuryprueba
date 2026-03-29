@@ -88,9 +88,34 @@ function ensureDatabaseCompatibility(PDO $pdo): void {
         if (!columnExists($pdo, 'product_variants', 'price')) {
             $pdo->exec("ALTER TABLE product_variants ADD COLUMN price DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER size");
         }
-        if (!columnExists($pdo, 'product_variants', 'stock')) {
-            $pdo->exec("ALTER TABLE product_variants ADD COLUMN stock INT NOT NULL DEFAULT 0 AFTER price");
+        if (!columnExists($pdo, 'product_variants', 'price_individual')) {
+            $pdo->exec("ALTER TABLE product_variants ADD COLUMN price_individual DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER price");
         }
+        if (!columnExists($pdo, 'product_variants', 'price_wholesale')) {
+            $pdo->exec("ALTER TABLE product_variants ADD COLUMN price_wholesale DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER price_individual");
+        }
+        if (!columnExists($pdo, 'product_variants', 'stock')) {
+            $pdo->exec("ALTER TABLE product_variants ADD COLUMN stock INT NOT NULL DEFAULT 0 AFTER price_wholesale");
+        }
+
+        // Backfill legacy values so older rows keep working.
+        $pdo->exec("UPDATE product_variants
+            SET price_individual = CASE WHEN price_individual = 0 THEN price ELSE price_individual END,
+                price_wholesale  = CASE WHEN price_wholesale  = 0 THEN price ELSE price_wholesale  END");
+    }
+
+    if (tableExists($pdo, 'product_colors')) {
+        if (!columnExists($pdo, 'product_colors', 'extra_price_individual')) {
+            $pdo->exec("ALTER TABLE product_colors ADD COLUMN extra_price_individual DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER extra_price");
+        }
+        if (!columnExists($pdo, 'product_colors', 'extra_price_wholesale')) {
+            $pdo->exec("ALTER TABLE product_colors ADD COLUMN extra_price_wholesale DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER extra_price_individual");
+        }
+
+        // Backfill legacy values so older rows keep working.
+        $pdo->exec("UPDATE product_colors
+            SET extra_price_individual = CASE WHEN extra_price_individual = 0 THEN extra_price ELSE extra_price_individual END,
+                extra_price_wholesale  = CASE WHEN extra_price_wholesale  = 0 THEN extra_price ELSE extra_price_wholesale  END");
     }
 
     // Legacy products tables may miss color fields used by admin/product viewer.

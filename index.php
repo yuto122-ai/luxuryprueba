@@ -14,13 +14,13 @@ $allProds = $db->query("
 ")->fetchAll(PDO::FETCH_ASSOC);
 
 $allVariants = $db->query("
-SELECT id, product_id, size, price
+SELECT id, product_id, size, price, price_individual, price_wholesale
 FROM product_variants
 ORDER BY FIELD(size,'XS','S','M','L','XL','XXL','XXXL')
 ")->fetchAll(PDO::FETCH_ASSOC);
 
 $allColors = $db->query("SELECT c.id,c.name,c.hex,c.extra_price,c.image_path FROM colors c WHERE c.active=1 ORDER BY c.id")->fetchAll(PDO::FETCH_ASSOC);
-$pcStmt = $db->prepare("SELECT pc.color_id, pc.extra_price, pc.image_path, c.name, c.hex
+$pcStmt = $db->prepare("SELECT pc.color_id, pc.extra_price, pc.extra_price_individual, pc.extra_price_wholesale, pc.image_path, c.name, c.hex
     FROM product_colors pc
     JOIN (
         SELECT color_id, MAX(id) AS max_id
@@ -38,7 +38,9 @@ foreach ($allVariants as $v) {
     $variantMap[$v['product_id']][] = [
         'id' => $v['id'],
         'size' => $v['size'],
-        'price' => (float)($v['price'] ?? 0)
+        'price' => (float)($v['price'] ?? 0),
+        'price_individual' => (float)($v['price_individual'] ?? $v['price'] ?? 0),
+        'price_wholesale' => (float)($v['price_wholesale'] ?? $v['price'] ?? 0)
     ];
 }
 
@@ -318,7 +320,7 @@ $colors = $allColors;
                 <div class="price-per-unit">$<?= number_format($prod['price_wholesale'],2) ?></div>
                 <p style="font-size:.68rem;color:var(--gray);margin-top:4px">Total aprox: $<?= number_format($prod['price_wholesale']*$prod['min_wholesale_qty'],2) ?> / paquete</p>
                 <div style="display:flex;gap:12px;margin-top:24px">
-                    <button class="btn btn-gold" onclick="open360Viewer(<?= $prod['id'] ?>)" style="flex:1;justify-content:center;font-size:.65rem"><i class="fas fa-eye"></i> Ver producto</button>
+                    <button class="btn btn-gold" onclick="open360Viewer(<?= $prod['id'] ?>, 'wholesale')" style="flex:1;justify-content:center;font-size:.65rem"><i class="fas fa-eye"></i> Ver producto</button>
                     <button class="btn btn-outline" onclick="addToCart(<?= $prod['id'] ?>,null,<?= $prod['min_wholesale_qty'] ?>)" style="flex:1;justify-content:center;font-size:.65rem"><i class="fas fa-boxes"></i> Pedir Mayoreo</button>
                 </div>
             </div>
@@ -353,14 +355,14 @@ $colors = $allColors;
         <?php $img=$prod['main_image']?'uploads/products/'.$prod['main_image']:'assets/placeholder.jpg'; ?>
         <div class="product-card" data-material="<?= $prod['material'] ?>" data-featured="<?= $prod['featured']?'true':'false' ?>">
             <div class="product-img-wrap">
-                 <img src="<?= $img ?>" alt="<?= htmlspecialchars($prod['name']) ?>" loading="lazy" onclick="open360Viewer(<?= $prod['id'] ?>)" style="cursor:pointer"
+                 <img src="<?= $img ?>" alt="<?= htmlspecialchars($prod['name']) ?>" loading="lazy" onclick="open360Viewer(<?= $prod['id'] ?>, 'individual')" style="cursor:pointer"
                      onerror="this.onerror=null;this.src='data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22520%22%3E%3Crect width=%22100%25%22 height=%22100%25%22 fill=%22%23131313%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 fill=%22%23888888%22 font-family=%22Arial%22 font-size=%2220%22%3EImagen no disponible%3C/text%3E%3C/svg%3E';">
                 <div class="product-badges">
                     <span class="badge badge-<?= $prod['material']==='cotton'?'cotton':'poly' ?>"><?= $prod['material']==='cotton'?'Algodón':'Poliéster' ?></span>
                     <?php if($prod['featured']): ?><span class="badge badge-sale">★ Destacado</span><?php endif; ?>
                 </div>
                 <div class="product-actions">
-                    <button class="btn btn-gold" onclick="open360Viewer(<?= $prod['id'] ?>)" style="flex:1;justify-content:center;font-size:.62rem;padding:10px"><i class="fas fa-eye"></i> Ver producto</button>
+                    <button class="btn btn-gold" onclick="open360Viewer(<?= $prod['id'] ?>, 'individual')" style="flex:1;justify-content:center;font-size:.62rem;padding:10px"><i class="fas fa-eye"></i> Ver producto</button>
                 </div>
             </div>
             <div class="product-info">
@@ -411,15 +413,18 @@ $colors = $allColors;
 // la del HTML. Este bloque corre DESPUÉS de main.js y vuelve a sobreescribir
 // con la versión correcta que usa PRODUCTS_DATA y stopPropagation.
 // ─────────────────────────────────────────────────────────────────────────────
-window.open360Viewer = function(productId) {
+window.open360Viewer = function(productId, saleMode) {
     var prod = PRODUCTS_DATA[productId];
     if (!prod) { console.error('Producto no encontrado:', productId); return; }
     var mobileViewerCta = document.getElementById('mobile-viewer-cta');
+    var mode = saleMode === 'wholesale' ? 'wholesale' : 'individual';
 
     document.getElementById('viewer-title').textContent    = prod.name;
     document.getElementById('viewer-desc').textContent     = prod.description ? prod.description.substring(0,120)+'…' : '';
     document.getElementById('viewer-material').textContent = prod.material==='cotton'?'100% Algodón':prod.material==='polyester'?'100% Poliéster':'Material Mixto';
-    var basePrice = parseFloat(prod.price_individual || prod.price_wholesale || 0);
+    var basePrice = mode === 'wholesale'
+        ? parseFloat(prod.price_wholesale || prod.price_individual || 0)
+        : parseFloat(prod.price_individual || prod.price_wholesale || 0);
 
     var priceEl = document.getElementById('viewer-price');
     priceEl.dataset.base = basePrice;
@@ -445,7 +450,8 @@ window.open360Viewer = function(productId) {
             mobileViewerCta.innerHTML = '<i class="fas fa-ruler-combined"></i> Selecciona talla';
             return;
         }
-        mobileViewerCta.innerHTML = '<i class="fas fa-shopping-bag"></i> Agregar · ' + priceEl.textContent;
+        var ctaLabel = mode === 'wholesale' ? 'Pedir mayoreo' : 'Agregar';
+        mobileViewerCta.innerHTML = '<i class="fas fa-shopping-bag"></i> ' + ctaLabel + ' · ' + priceEl.textContent;
     }
 
     var imgEl = document.getElementById('viewer-image');
@@ -482,7 +488,9 @@ window.open360Viewer = function(productId) {
         sizesEl.dataset.selected = sz.id;
 
         // Usa precio real por talla desde DB si existe.
-        var variantPrice = parseFloat(sz.price || 0);
+        var variantPrice = mode === 'wholesale'
+            ? parseFloat(sz.price_wholesale || sz.price || 0)
+            : parseFloat(sz.price_individual || sz.price || 0);
         selectedSizePrice = variantPrice > 0 ? variantPrice : null;
 
         updateViewerPrice();
@@ -527,7 +535,10 @@ window.open360Viewer = function(productId) {
     if (prod.colors && prod.colors.length > 0) {
         colorsEl.innerHTML = prod.colors.map(function(c){
             var border = (c.hex === '#ffffff' || c.hex.toLowerCase() === 'white') ? 'border:1px solid #000;' : '';
-            return '<div class="color-circle" data-extra="'+ (parseFloat(c.extra_price||0).toFixed(2)) +'" data-image="'+ (c.image_path||'') +'" style="background:'+ c.hex +';'+ border +'"></div>';
+            var colorExtra = mode === 'wholesale'
+                ? parseFloat(c.extra_price_wholesale || c.extra_price || 0)
+                : parseFloat(c.extra_price_individual || c.extra_price || 0);
+            return '<div class="color-circle" data-extra="'+ colorExtra.toFixed(2) +'" data-image="'+ (c.image_path||'') +'" style="background:'+ c.hex +';'+ border +'"></div>';
         }).join('');
     }
 
@@ -579,7 +590,7 @@ window.open360Viewer = function(productId) {
             else alert('Por favor selecciona una talla');
             return;
         }
-        var qty = prod.sale_type==='wholesale' ? (prod.min_wholesale_qty||1) : 1;
+        var qty = mode === 'wholesale' ? (prod.min_wholesale_qty||1) : 1;
         if (typeof addToCart==='function') addToCart(productId, parseInt(sel)||null, qty);
         window.close360Viewer();
     });

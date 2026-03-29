@@ -14,8 +14,8 @@ function getCartItems($db, $userId, $sessionId) {
     if ($userId) {
         $stmt = $db->prepare("
             SELECT c.id, c.product_id, c.variant_id, c.quantity,
-                   p.name, p.material, p.price_individual, p.price_wholesale, p.sale_type,
-                     pv.size, pv.price AS variant_price,
+                                     p.name, p.material, p.price_individual, p.price_wholesale, p.min_wholesale_qty, p.sale_type,
+                                         pv.size, pv.price AS variant_price, pv.price_individual AS variant_price_individual, pv.price_wholesale AS variant_price_wholesale,
                    (SELECT image_path FROM product_images
                     WHERE product_id = p.id AND is_main = 1 LIMIT 1) as image
             FROM cart c
@@ -27,8 +27,8 @@ function getCartItems($db, $userId, $sessionId) {
     } else {
         $stmt = $db->prepare("
             SELECT c.id, c.product_id, c.variant_id, c.quantity,
-                   p.name, p.material, p.price_individual, p.price_wholesale, p.sale_type,
-                     pv.size, pv.price AS variant_price,
+                                     p.name, p.material, p.price_individual, p.price_wholesale, p.min_wholesale_qty, p.sale_type,
+                                         pv.size, pv.price AS variant_price, pv.price_individual AS variant_price_individual, pv.price_wholesale AS variant_price_wholesale,
                    (SELECT image_path FROM product_images
                     WHERE product_id = p.id AND is_main = 1 LIMIT 1) as image
             FROM cart c
@@ -42,12 +42,28 @@ function getCartItems($db, $userId, $sessionId) {
     $items = $stmt->fetchAll();
 
     foreach ($items as &$item) {
-        // Si existe precio por talla, tiene prioridad para este item.
-        $variantPrice = (float)($item['variant_price'] ?? 0);
-        if ($variantPrice > 0) {
-            $item['price'] = $variantPrice;
+        $qty = (int)($item['quantity'] ?? 1);
+        $minWholesaleQty = (int)($item['min_wholesale_qty'] ?? 1);
+        $saleType = $item['sale_type'] ?? 'individual';
+        $isWholesale = ($saleType === 'wholesale') || ($saleType === 'both' && $qty >= max(1, $minWholesaleQty));
+
+        $variantIndividual = (float)($item['variant_price_individual'] ?? $item['variant_price'] ?? 0);
+        $variantWholesale  = (float)($item['variant_price_wholesale'] ?? $item['variant_price'] ?? 0);
+        $baseIndividual = (float)($item['price_individual'] ?? 0);
+        $baseWholesale  = (float)($item['price_wholesale'] ?? 0);
+
+        if ($isWholesale) {
+            if ($variantWholesale > 0) {
+                $item['price'] = $variantWholesale;
+            } else {
+                $item['price'] = $baseWholesale > 0 ? $baseWholesale : $baseIndividual;
+            }
         } else {
-            $item['price'] = (float)($item['price_individual'] ?? $item['price_wholesale'] ?? 0);
+            if ($variantIndividual > 0) {
+                $item['price'] = $variantIndividual;
+            } else {
+                $item['price'] = $baseIndividual > 0 ? $baseIndividual : $baseWholesale;
+            }
         }
 
         // BUG 4 FIX: material_label en español para mostrarse en el carrito
