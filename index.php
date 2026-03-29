@@ -75,7 +75,8 @@ $colors = $allColors;
         .wholesale-pack-card{background:var(--dark2);border:1px solid rgba(201,168,76,.15);padding:40px;position:relative;overflow:hidden;transition:var(--transition)}
         .wholesale-pack-card:hover{border-color:rgba(201,168,76,.5);box-shadow:var(--shadow-gold)}
         .wholesale-pack-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent)}
-        .pack-material-icon{width:50px;height:50px;border:1px solid rgba(201,168,76,.3);display:flex;align-items:center;justify-content:center;font-size:1.4rem;margin-bottom:20px;color:var(--gold)}
+        .pack-material-icon{width:50px;height:50px;border:1px solid rgba(201,168,76,.3);display:flex;align-items:center;justify-content:center;margin-bottom:20px;color:var(--gold);overflow:hidden;background:#0f0f0f}
+        .pack-material-thumb{width:100%;height:100%;object-fit:cover;display:block}
         .pack-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:24px}
         .min-qty-badge{display:inline-block;background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.3);color:var(--gold);padding:4px 12px;font-size:.62rem;letter-spacing:.2em;text-transform:uppercase;margin-bottom:16px}
         .price-per-unit{font-family:var(--font-serif);font-size:2.2rem;color:var(--white)}
@@ -300,7 +301,16 @@ $colors = $allColors;
             <?php foreach($wholesaleProducts as $prod): ?>
             <?php $img=$prod['main_image']?'uploads/products/'.$prod['main_image']:'assets/placeholder.jpg'; ?>
             <div class="wholesale-pack-card">
-                <div class="pack-material-icon"><?= $prod['material']==='cotton'?'🌿':'⚡' ?></div>
+                <div class="pack-material-icon">
+                    <img
+                        class="pack-material-thumb"
+                        src="<?= htmlspecialchars($img) ?>"
+                        alt="Miniatura de <?= htmlspecialchars($prod['name']) ?>"
+                        loading="lazy"
+                        decoding="async"
+                        onerror="this.onerror=null;this.src='assets/placeholder.jpg';"
+                    >
+                </div>
                 <div class="min-qty-badge">Mín. <?= $prod['min_wholesale_qty'] ?> piezas</div>
                 <h3 style="font-family:var(--font-serif);font-size:1.4rem;margin-bottom:8px"><?= htmlspecialchars($prod['name']) ?></h3>
                 <p style="font-size:.8rem;color:var(--gray);margin-bottom:20px"><?= htmlspecialchars(substr($prod['description']??'',0,100)) ?>...</p>
