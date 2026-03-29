@@ -44,10 +44,10 @@ cd $RemotePath
 git fetch origin
 git checkout master
 git reset --hard origin/master
-sed -i \"/^define('DB_USER'/c\\define('DB_USER', '$DbUser');\" php/config.php
-sed -i \"/^define('DB_PASS'/c\\define('DB_PASS', '$DbPass');\" php/config.php
-php -r \"if(function_exists('opcache_reset')){opcache_reset(); echo 'OPCACHE_RESET\\n';}\"
-php -r \"require '$RemotePath/php/config.php'; getDB(); echo 'DB_OK\\n';\"
+sed -i "/^define('DB_USER'/c\define('DB_USER', '$DbUser');" php/config.php
+sed -i "/^define('DB_PASS'/c\define('DB_PASS', '$DbPass');" php/config.php
+php -r "if(function_exists('opcache_reset')){opcache_reset(); echo 'OPCACHE_RESET\\n';}"
+php -r "require '$RemotePath/php/config.php'; getDB(); echo 'DB_OK\\n';"
 git log --oneline -n 1
 "@
 
