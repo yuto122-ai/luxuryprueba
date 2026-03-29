@@ -56,10 +56,15 @@ $remoteScript = $remoteScript -replace "`r`n", "`n"
 $remoteScriptB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($remoteScript))
 $remoteCommand = "echo $remoteScriptB64 | base64 -d | bash"
 
+$prevErrorActionPreference = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
 $deployOutput = & $plinkPath -ssh "$User@$ServerHost" -P $Port $remoteCommand 2>&1
+$nativeExitCode = $LASTEXITCODE
+$ErrorActionPreference = $prevErrorActionPreference
+
 $deployOutput | ForEach-Object { Write-Host $_ }
 
-if ($LASTEXITCODE -ne 0) {
+if ($nativeExitCode -ne 0) {
     throw "Fallo el despliegue remoto."
 }
 
