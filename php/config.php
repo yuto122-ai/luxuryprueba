@@ -100,8 +100,8 @@ function ensureDatabaseCompatibility(PDO $pdo): void {
 
         // Backfill legacy values so older rows keep working.
         $pdo->exec("UPDATE product_variants
-            SET price_individual = CASE WHEN price_individual = 0 THEN price ELSE price_individual END,
-                price_wholesale  = CASE WHEN price_wholesale  = 0 THEN price ELSE price_wholesale  END");
+            SET price_individual = CASE WHEN price_individual = 0 THEN COALESCE(price, 0) ELSE COALESCE(price_individual, 0) END,
+                price_wholesale  = CASE WHEN price_wholesale  = 0 THEN COALESCE(price, 0) ELSE COALESCE(price_wholesale, 0)  END");
     }
 
     if (tableExists($pdo, 'product_colors')) {
@@ -114,8 +114,8 @@ function ensureDatabaseCompatibility(PDO $pdo): void {
 
         // Backfill legacy values so older rows keep working.
         $pdo->exec("UPDATE product_colors
-            SET extra_price_individual = CASE WHEN extra_price_individual = 0 THEN extra_price ELSE extra_price_individual END,
-                extra_price_wholesale  = CASE WHEN extra_price_wholesale  = 0 THEN extra_price ELSE extra_price_wholesale  END");
+            SET extra_price_individual = CASE WHEN extra_price_individual = 0 THEN COALESCE(extra_price, 0) ELSE COALESCE(extra_price_individual, 0) END,
+                extra_price_wholesale  = CASE WHEN extra_price_wholesale  = 0 THEN COALESCE(extra_price, 0) ELSE COALESCE(extra_price_wholesale, 0)  END");
     }
 
     // Legacy products tables may miss color fields used by admin/product viewer.
