@@ -488,6 +488,19 @@ window.open360Viewer = function(productId) {
 
     // ===== COLORES =====
     var colorsEl = document.getElementById('viewer-colors');
+    function getColorImageSrc(imagePath) {
+        if (!imagePath) return '';
+        var p = String(imagePath).trim();
+        if (!p) return '';
+        if (p.startsWith('http://') || p.startsWith('https://') || p.startsWith('/')) {
+            return p + (p.indexOf('?') === -1 ? '?v=' + Date.now() : '&v=' + Date.now());
+        }
+        if (p.startsWith('uploads/')) {
+            return p + (p.indexOf('?') === -1 ? '?v=' + Date.now() : '&v=' + Date.now());
+        }
+        return 'uploads/product_colors/' + p + '?v=' + Date.now();
+    }
+
     if (prod.colors && prod.colors.length > 0) {
         colorsEl.innerHTML = prod.colors.map(function(c){
             var border = (c.hex === '#ffffff' || c.hex.toLowerCase() === 'white') ? 'border:1px solid #000;' : '';
@@ -509,7 +522,8 @@ window.open360Viewer = function(productId) {
 
                     var image = this.dataset.image;
                     if (image) {
-                        document.getElementById('viewer-image').src = 'uploads/product_colors/' + image;
+                        var nextSrc = getColorImageSrc(image);
+                        if (nextSrc) document.getElementById('viewer-image').src = nextSrc;
                     }
                 };
             });
@@ -520,7 +534,8 @@ window.open360Viewer = function(productId) {
             updateViewerPrice();
             var firstImage = circles[0].dataset.image;
             if (firstImage) {
-                document.getElementById('viewer-image').src = 'uploads/product_colors/' + firstImage;
+                var firstSrc = getColorImageSrc(firstImage);
+                if (firstSrc) document.getElementById('viewer-image').src = firstSrc;
             }
         }
     }, 10);
