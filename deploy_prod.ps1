@@ -1,5 +1,5 @@
 param(
-    [string]$Host = "188.137.179.54",
+    [string]$ServerHost = "188.137.179.54",
     [string]$User = "root",
     [int]$Port = 22,
     [string]$RemotePath = "/var/www/html",
@@ -54,11 +54,11 @@ git log --oneline -n 1
 $remoteScriptB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($remoteScript))
 $remoteCommand = "echo $remoteScriptB64 | base64 -d | bash"
 
-& $plinkPath -ssh "$User@$Host" -P $Port $remoteCommand
+& $plinkPath -ssh "$User@$ServerHost" -P $Port $remoteCommand
 if ($LASTEXITCODE -ne 0) {
     throw "Fallo el despliegue remoto."
 }
 
 Write-Host "[4/4] Despliegue completado correctamente."
-Write-Host "Servidor: $Host"
+Write-Host "Servidor: $ServerHost"
 Write-Host "Ruta remota: $RemotePath"
