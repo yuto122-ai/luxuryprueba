@@ -9,8 +9,8 @@ if (session_status() === PHP_SESSION_NONE) {
 // ===========================
 
 define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', '');
+define('DB_USER', 'luxury_app');
+define('DB_PASS', 'PonUnaClaveFuerte_2026');
 define('DB_NAME', 'black_clothes');
 
 function tableExists(PDO $pdo, string $tableName): bool {
