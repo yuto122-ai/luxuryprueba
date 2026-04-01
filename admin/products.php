@@ -132,16 +132,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
                     $ext = strtolower(pathinfo($colorImages['name'][$colorId], PATHINFO_EXTENSION));
                     if (in_array($ext, ['jpg','jpeg','png','webp'])) {
-                        $filename = 'prod_' . $productId . '_color_' . $colorId . '.' . $ext;
+                        // Nombre unico para evitar cache obsoleta al reemplazar imagen.
+                        $filename = 'prod_' . $productId . '_color_' . $colorId . '_' . time() . '.' . $ext;
                         if (move_uploaded_file($colorImages['tmp_name'][$colorId], $uploadDir . $filename)) {
                             $imagePath = $filename;
                         }
                     }
                 }
 
-                // Crea/actualiza el precio e imagen de este color para el producto.
-                $db->prepare("INSERT INTO product_colors (product_id, color_id, extra_price, image_path) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE extra_price = VALUES(extra_price), image_path = COALESCE(VALUES(image_path), image_path)")
-                   ->execute([$productId, $colorId, $extra, $imagePath]);
+                // Crea/actualiza incluso en bases viejas sin UNIQUE(product_id,color_id).
+                $existingStmt = $db->prepare("SELECT id FROM product_colors WHERE product_id = ? AND color_id = ? ORDER BY id DESC LIMIT 1");
+                $existingStmt->execute([$productId, $colorId]);
+                $existingId = $existingStmt->fetchColumn();
+
+                if ($existingId) {
+                    $db->prepare("UPDATE product_colors
+                        SET extra_price = ?, image_path = COALESCE(?, image_path)
+                        WHERE id = ?")
+                       ->execute([$extra, $imagePath, $existingId]);
+
+                    // Limpieza de historico duplicado para no romper seleccion de color.
+                    $db->prepare("DELETE FROM product_colors WHERE product_id = ? AND color_id = ? AND id <> ?")
+                       ->execute([$productId, $colorId, $existingId]);
+                } else {
+                    $db->prepare("INSERT INTO product_colors (product_id, color_id, extra_price, image_path) VALUES (?,?,?,?)")
+                       ->execute([$productId, $colorId, $extra, $imagePath]);
+                }
             }
 
             $action = 'list';
@@ -179,7 +195,15 @@ if ($action === 'edit' && isset($_GET['id'])) {
         }
 
         $colorMap = [];
-        $cpstmt = $db->prepare("SELECT * FROM product_colors WHERE product_id = ?");
+        $cpstmt = $db->prepare("SELECT pc.*
+            FROM product_colors pc
+            JOIN (
+                SELECT color_id, MAX(id) AS max_id
+                FROM product_colors
+                WHERE product_id = ?
+                GROUP BY color_id
+            ) latest ON latest.max_id = pc.id
+            ORDER BY pc.color_id");
         $cpstmt->execute([$editProduct['id']]);
         $productColors = $cpstmt->fetchAll(PDO::FETCH_ASSOC);
         foreach ($productColors as $pc) {
@@ -348,11 +372,18 @@ $categories = $db->query("SELECT * FROM categories ORDER BY id")->fetchAll();
                 <div class="form-group">
                     <label class="form-label">Color *</label>
                     <select name="color" class="form-input">
-                        <option value="blanco" <?= ($editProduct['color'] ?? '') === 'blanco' ? 'selected' : '' ?>>Blanco</option>
-                        <option value="negro"  <?= ($editProduct['color'] ?? '') === 'negro'  ? 'selected' : '' ?>>Negro</option>
-                        <option value="rojo"   <?= ($editProduct['color'] ?? '') === 'rojo'   ? 'selected' : '' ?>>Rojo</option>
-                        <option value="azul"   <?= ($editProduct['color'] ?? '') === 'azul'   ? 'selected' : '' ?>>Azul</option>
-                        <option value="verde"  <?= ($editProduct['color'] ?? '') === 'verde'  ? 'selected' : '' ?>>Verde</option>
+                        <?php
+                            $selectedColor = strtolower(trim((string)($editProduct['color'] ?? '')));
+                        ?>
+                        <?php foreach ($allColors as $c): ?>
+                        <?php
+                            $value = strtolower(trim((string)$c['name']));
+                            $isSelected = $selectedColor === $value;
+                        ?>
+                        <option value="<?= htmlspecialchars($value) ?>" <?= $isSelected ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($c['name']) ?>
+                        </option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="form-group">

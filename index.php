@@ -17,7 +17,17 @@ ORDER BY FIELD(size,'XS','S','M','L','XL','XXL','XXXL')
 ")->fetchAll(PDO::FETCH_ASSOC);
 
 $allColors = $db->query("SELECT c.id,c.name,c.hex,c.extra_price,c.image_path FROM colors c WHERE c.active=1 ORDER BY c.id")->fetchAll(PDO::FETCH_ASSOC);
-$pcStmt = $db->prepare("SELECT pc.color_id, pc.extra_price, pc.image_path, c.name, c.hex FROM product_colors pc JOIN colors c ON pc.color_id=c.id WHERE pc.product_id = ? AND c.active=1 ORDER BY c.id");
+$pcStmt = $db->prepare("SELECT pc.color_id, pc.extra_price, pc.image_path, c.name, c.hex
+    FROM product_colors pc
+    JOIN (
+        SELECT color_id, MAX(id) AS max_id
+        FROM product_colors
+        WHERE product_id = ?
+        GROUP BY color_id
+    ) latest ON latest.max_id = pc.id
+    JOIN colors c ON pc.color_id = c.id
+    WHERE c.active = 1
+    ORDER BY c.id");
 
 $variantMap = [];
 
