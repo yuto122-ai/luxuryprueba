@@ -1,4 +1,5 @@
 <?php require_once 'php/config.php'; ?>
+<script src="https://js.stripe.com/v3/"></script>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -294,7 +295,7 @@
                         Compra protegida, confirmación por WhatsApp/Telegram y soporte humano inmediato.
                     </div>
                     <button class="btn btn-gold" onclick="placeOrder()" id="place-order-btn" style="width:100%;justify-content:center;margin-top:24px;font-size:.78rem">
-                        <i class="fas fa-lock"></i> Confirmar Pedido
+                        <i class="fas fa-lock"></i> Ir al pago
                     </button>
                     <div style="margin-top:16px;font-size:.68rem;color:var(--gray);text-align:center;line-height:1.8">
                         <i class="fas fa-shield-alt" style="color:var(--gold)"></i> Pedido seguro<br>
@@ -314,7 +315,7 @@
     <div class="wrap">
         <div class="mobile-checkout-total" id="mobile-checkout-total">$0.00</div>
         <button class="btn btn-gold" id="mobile-place-order-btn" onclick="placeOrder()" style="flex:1;justify-content:center;padding:14px 18px;font-size:.72rem">
-            <i class="fas fa-lock"></i> Confirmar
+            <i class="fas fa-lock"></i> Pagar
         </button>
     </div>
 </div>
@@ -339,11 +340,10 @@ function setCheckoutStep(step) {
     const body = document.body;
     const shippingBtn = document.getElementById('step-btn-shipping');
     const summaryBtn = document.getElementById('step-btn-summary');
-
     const isSummary = step === 'summary';
+
     body.classList.toggle('checkout-step-summary', isSummary);
     body.classList.toggle('checkout-step-shipping', !isSummary);
-
     if (shippingBtn) shippingBtn.classList.toggle('active', !isSummary);
     if (summaryBtn) summaryBtn.classList.toggle('active', isSummary);
 }
@@ -404,7 +404,7 @@ async function loadCheckoutCart() {
         const res = await fetch('api/cart.php?action=get');
         cartData = await res.json();
         renderSummary();
-    } catch(e) {}
+    } catch (e) {}
 }
 
 function renderSummary() {
@@ -422,7 +422,7 @@ function renderSummary() {
         if (individual > 0) return individual;
         return parseFloat(item.price || 0);
     };
-    
+
     if (cartData.items.length === 0) {
         container.innerHTML = '<div style="text-align:center;padding:30px;color:var(--gray)">Carrito vacío — <a href="index" style="color:var(--gold)">ir a la tienda</a></div>';
         if (mobileTotalEl) mobileTotalEl.textContent = '$0.00';
@@ -460,9 +460,7 @@ function renderSummary() {
 }
 
 async function placeOrder() {
-    if (isPlacingOrder) {
-        return;
-    }
+    if (isPlacingOrder) return;
 
     const name = document.getElementById('shipping-name').value.trim();
     const phone = document.getElementById('shipping-phone').value.trim();
@@ -471,7 +469,7 @@ async function placeOrder() {
 
     if (!name || !address) {
         document.getElementById('checkout-alert').innerHTML = '<div class="alert alert-error"><i class="fas fa-exclamation-circle"></i> Completa los datos de envío requeridos</div>';
-        window.scrollTo({top:0,behavior:'smooth'});
+        window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
     }
 
@@ -488,60 +486,68 @@ async function placeOrder() {
     const idempotencyKey = buildIdempotencyKey();
 
     try {
-        const res = await fetch('api/orders.php', {
-            method:'POST',
-            headers:{
-                'Content-Type':'application/json',
+        const res = await fetch('api/create-checkout-session.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
                 'X-Idempotency-Key': idempotencyKey
             },
             body: JSON.stringify({
-                action:'place', order_type:orderType,
-                shipping_name:name, shipping_phone:phone,
-                shipping_address:address, notes,
+                action: 'create_checkout_session',
+                order_type: orderType,
+                shipping_name: name,
+                shipping_phone: phone,
+                shipping_address: address,
+                notes,
                 idempotency_key: idempotencyKey
             })
         });
-        const data = await res.json();
 
-        if (data.success) {
-            const duplicateNote = data.duplicate
-                ? '<br><small>Detectamos un reintento y evitamos un cobro/orden duplicada.</small>'
-                : '';
-            document.getElementById('checkout-alert').innerHTML = `
-                <div class="alert alert-success" style="font-size:.88rem">
-                    <i class="fas fa-check-circle"></i> ¡Pedido <strong>#${data.order_number}</strong> realizado exitosamente!<br>
-                    <small>Total: $${data.total.toFixed(2)} — Te contactaremos por WhatsApp/Telegram para coordinar pago y envío.</small>${duplicateNote}
-                </div>`;
-            window.scrollTo({top:0,behavior:'smooth'});
-            document.getElementById('checkout-items').innerHTML = '';
-            document.querySelectorAll('.cart-badge').forEach(b => { b.style.display = 'none'; b.textContent = '0'; });
-            btn.innerHTML = '<i class="fas fa-check"></i> ¡Pedido Realizado!';
-            btn.style.background = 'var(--green)';
-            if (mobileBtn) {
-                mobileBtn.innerHTML = '<i class="fas fa-check"></i> Pedido listo';
-                mobileBtn.style.background = 'var(--green)';
-            }
-        } else {
-            const messageText = data.message || 'Error al procesar el pedido';
-            const debugInfo = data.error ? `<br><small style="opacity:.8">${escapeHtml(data.error)}</small>` : '';
-            document.getElementById('checkout-alert').innerHTML = `<div class="alert alert-error">${escapeHtml(messageText)}${debugInfo}</div>`;
-            if (messageText.includes('Inicia sesión')) {
-                setTimeout(() => window.location.href = 'login', 2000);
-            }
-            btn.innerHTML = '<i class="fas fa-lock"></i> Confirmar Pedido';
+        const data = await res.json();
+        if (!data.success || !data.id) {
+            const messageText = data.error || data.message || 'No se pudo iniciar el pago';
+            document.getElementById('checkout-alert').innerHTML = `<div class="alert alert-error">${escapeHtml(messageText)}</div>`;
+            btn.innerHTML = '<i class="fas fa-lock"></i> Ir al pago';
             btn.disabled = false;
             if (mobileBtn) {
-                mobileBtn.innerHTML = '<i class="fas fa-lock"></i> Confirmar';
+                mobileBtn.innerHTML = '<i class="fas fa-lock"></i> Pagar';
+                mobileBtn.disabled = false;
+            }
+            isPlacingOrder = false;
+            return;
+        }
+
+        const stripeKey = '<?= htmlspecialchars(STRIPE_PUBLISHABLE_KEY, ENT_QUOTES) ?>';
+        if (!stripeKey) {
+            document.getElementById('checkout-alert').innerHTML = '<div class="alert alert-error">Falta configurar la clave pública de Stripe.</div>';
+            btn.innerHTML = '<i class="fas fa-lock"></i> Ir al pago';
+            btn.disabled = false;
+            if (mobileBtn) {
+                mobileBtn.innerHTML = '<i class="fas fa-lock"></i> Pagar';
+                mobileBtn.disabled = false;
+            }
+            isPlacingOrder = false;
+            return;
+        }
+
+        const stripe = Stripe(stripeKey);
+        const result = await stripe.redirectToCheckout({ sessionId: data.id });
+        if (result.error) {
+            document.getElementById('checkout-alert').innerHTML = `<div class="alert alert-error">${escapeHtml(result.error.message || 'No se pudo abrir Stripe')}</div>`;
+            btn.innerHTML = '<i class="fas fa-lock"></i> Ir al pago';
+            btn.disabled = false;
+            if (mobileBtn) {
+                mobileBtn.innerHTML = '<i class="fas fa-lock"></i> Pagar';
                 mobileBtn.disabled = false;
             }
             isPlacingOrder = false;
         }
-    } catch(e) {
+    } catch (e) {
         document.getElementById('checkout-alert').innerHTML = '<div class="alert alert-error">Error de conexión</div>';
-        btn.innerHTML = '<i class="fas fa-lock"></i> Confirmar Pedido';
+        btn.innerHTML = '<i class="fas fa-lock"></i> Ir al pago';
         btn.disabled = false;
         if (mobileBtn) {
-            mobileBtn.innerHTML = '<i class="fas fa-lock"></i> Confirmar';
+            mobileBtn.innerHTML = '<i class="fas fa-lock"></i> Pagar';
             mobileBtn.disabled = false;
         }
         isPlacingOrder = false;

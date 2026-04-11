@@ -13,6 +13,9 @@ define('DB_USER', 'luxury_app');
 define('DB_PASS', 'PonUnaClaveFuerte_2026');
 define('DB_NAME', 'black_clothes');
 
+define('STRIPE_SECRET_KEY', getenv('STRIPE_SECRET_KEY') ?: '');
+define('STRIPE_PUBLISHABLE_KEY', getenv('STRIPE_PUBLISHABLE_KEY') ?: '');
+
 function tableExists(PDO $pdo, string $tableName): bool {
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?");
     $stmt->execute([$tableName]);
