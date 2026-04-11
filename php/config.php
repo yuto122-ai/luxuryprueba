@@ -13,6 +13,17 @@ define('DB_USER', 'luxury_app');
 define('DB_PASS', 'PonUnaClaveFuerte_2026');
 define('DB_NAME', 'black_clothes');
 
+$protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+$host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+$basePath = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/');
+
+// For API calls under /api, move one level up to the public root.
+if (preg_match('#/api$#', $basePath)) {
+    $basePath = preg_replace('#/api$#', '', $basePath);
+}
+
+define('BASE_URL', $protocol . $host . ($basePath ? $basePath : ''));
+
 function readStripeSecretValue(string $keyName): string {
     $value = getenv($keyName);
     if ($value !== false && $value !== '') {
