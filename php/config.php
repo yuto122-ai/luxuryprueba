@@ -13,8 +13,40 @@ define('DB_USER', 'luxury_app');
 define('DB_PASS', 'PonUnaClaveFuerte_2026');
 define('DB_NAME', 'black_clothes');
 
-define('STRIPE_SECRET_KEY', getenv('STRIPE_SECRET_KEY') ?: '');
-define('STRIPE_PUBLISHABLE_KEY', getenv('STRIPE_PUBLISHABLE_KEY') ?: '');
+function readStripeSecretValue(string $keyName): string {
+    $value = getenv($keyName);
+    if ($value !== false && $value !== '') {
+        return $value;
+    }
+
+    $stripeEnvCandidates = [
+        '/var/www/stripe.env',
+        dirname(__DIR__, 2) . '/stripe.env',
+    ];
+
+    foreach ($stripeEnvCandidates as $candidate) {
+        if (!is_file($candidate)) {
+            continue;
+        }
+
+        $lines = file($candidate, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+        foreach ($lines as $line) {
+            if (strpos($line, '=') === false) {
+                continue;
+            }
+
+            [$fileKey, $fileValue] = array_map('trim', explode('=', $line, 2));
+            if ($fileKey === $keyName && $fileValue !== '') {
+                return $fileValue;
+            }
+        }
+    }
+
+    return '';
+}
+
+define('STRIPE_SECRET_KEY', readStripeSecretValue('STRIPE_SECRET_KEY'));
+define('STRIPE_PUBLISHABLE_KEY', readStripeSecretValue('STRIPE_PUBLISHABLE_KEY'));
 
 function tableExists(PDO $pdo, string $tableName): bool {
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?");
