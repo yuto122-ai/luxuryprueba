@@ -1,28 +1,7 @@
 <?php
 require_once __DIR__ . '/../php/config.php';
 
-$autoloadCandidates = [
-    __DIR__ . '/../vendor/autoload.php',
-    __DIR__ . '/../../vendor/autoload.php',
-    __DIR__ . '/../luxuryprueba-master/vendor/autoload.php',
-    __DIR__ . '/../../luxuryprueba-master/vendor/autoload.php',
-];
-
-$autoloadPath = null;
-foreach ($autoloadCandidates as $candidate) {
-    if (file_exists($candidate)) {
-        $autoloadPath = $candidate;
-        break;
-    }
-}
-
 header('Content-Type: application/json; charset=utf-8');
-
-if (!$autoloadPath) {
-    http_response_code(500);
-    echo json_encode(['success' => false, 'error' => 'Falta vendor/autoload.php en el servidor.']);
-    exit;
-}
 
 if (!defined('STRIPE_SECRET_KEY') || STRIPE_SECRET_KEY === '') {
     http_response_code(500);
@@ -30,15 +9,36 @@ if (!defined('STRIPE_SECRET_KEY') || STRIPE_SECRET_KEY === '') {
     exit;
 }
 
-require_once $autoloadPath;
+function stripeApiRequest(string $method, string $path, array $payload = []): array {
+    $url = 'https://api.stripe.com' . $path;
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CUSTOMREQUEST => $method,
+        CURLOPT_HTTPAUTH => CURLAUTH_BASIC,
+        CURLOPT_USERPWD => STRIPE_SECRET_KEY . ':',
+        CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded'],
+        CURLOPT_POSTFIELDS => http_build_query($payload),
+        CURLOPT_TIMEOUT => 30,
+    ]);
+    $response = curl_exec($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
 
-if (!class_exists('Stripe\\Stripe') || !class_exists('Stripe\\Checkout\\Session')) {
-    http_response_code(500);
-    echo json_encode(['success' => false, 'error' => 'Stripe no está disponible en el servidor.']);
-    exit;
+    $decoded = json_decode((string)$response, true);
+    if ($response === false || $curlError) {
+        throw new RuntimeException($curlError ?: 'Error de red al contactar Stripe');
+    }
+    if ($status < 200 || $status >= 300) {
+        $message = $decoded['error']['message'] ?? ('Stripe respondió con estado ' . $status);
+        throw new RuntimeException($message);
+    }
+    if (!is_array($decoded)) {
+        throw new RuntimeException('Respuesta inválida de Stripe');
+    }
+    return $decoded;
 }
-
-call_user_func(['Stripe\\Stripe', 'setApiKey'], STRIPE_SECRET_KEY);
 
 function normalizeStripeText(?string $value): string {
     $text = trim((string)$value);
@@ -173,23 +173,28 @@ try {
         ]);
     }
 
-    $session = call_user_func(['Stripe\\Checkout\\Session', 'create'], [
-        'payment_method_types' => ['card'],
-        'line_items' => $lineItems,
+    $payload = [
         'mode' => 'payment',
-        'metadata' => [
-            'order_id' => (string)$orderId,
-            'order_number' => $orderNumber,
-        ],
         'success_url' => BASE_URL . '/success.php?session_id={CHECKOUT_SESSION_ID}',
         'cancel_url' => BASE_URL . '/cancel.php?order_id=' . urlencode((string)$orderId),
-    ]);
+        'metadata[order_id]' => (string)$orderId,
+        'metadata[order_number]' => $orderNumber,
+    ];
+
+    foreach ($lineItems as $index => $lineItem) {
+        $payload["line_items[$index][quantity]"] = (string)$lineItem['quantity'];
+        $payload["line_items[$index][price_data][currency]"] = $lineItem['price_data']['currency'];
+        $payload["line_items[$index][price_data][unit_amount]"] = (string)$lineItem['price_data']['unit_amount'];
+        $payload["line_items[$index][price_data][product_data][name]"] = $lineItem['price_data']['product_data']['name'];
+    }
+
+    $session = stripeApiRequest('POST', '/v1/checkout/sessions', $payload);
 
     $db->commit();
 
     echo json_encode([
         'success' => true,
-        'id' => $session->id,
+        'id' => $session['id'] ?? null,
         'order_id' => $orderId,
         'order_number' => $orderNumber,
         'total' => $total,

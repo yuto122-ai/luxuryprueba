@@ -21,26 +21,44 @@ if (!isset($_GET['session_id'])) {
     if (!file_exists($vendorAutoload)) {
         $vendorAutoload = __DIR__ . '/../luxuryprueba-master/vendor/autoload.php';
     }
-    if (!file_exists($vendorAutoload)) {
-        die('Falta vendor/autoload.php. Ejecuta composer install.');
-    }
-    require_once $vendorAutoload;
-
     if (!defined('STRIPE_SECRET_KEY') || STRIPE_SECRET_KEY === '') {
         die('Falta configurar STRIPE_SECRET_KEY.');
     }
 
-    if (!class_exists('Stripe\\Stripe') || !class_exists('Stripe\\Checkout\\Session')) {
-        die('Stripe no está disponible en el servidor.');
+    function stripeApiRequest(string $method, string $path): array {
+        $ch = curl_init('https://api.stripe.com' . $path);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CUSTOMREQUEST => $method,
+            CURLOPT_HTTPAUTH => CURLAUTH_BASIC,
+            CURLOPT_USERPWD => STRIPE_SECRET_KEY . ':',
+            CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded'],
+            CURLOPT_TIMEOUT => 30,
+        ]);
+        $response = curl_exec($ch);
+        $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+
+        $decoded = json_decode((string)$response, true);
+        if ($response === false || $curlError) {
+            throw new RuntimeException($curlError ?: 'Error de red al contactar Stripe');
+        }
+        if ($status < 200 || $status >= 300) {
+            $message = $decoded['error']['message'] ?? ('Stripe respondió con estado ' . $status);
+            throw new RuntimeException($message);
+        }
+        if (!is_array($decoded)) {
+            throw new RuntimeException('Respuesta inválida de Stripe');
+        }
+        return $decoded;
     }
 
-    call_user_func(['Stripe\\Stripe', 'setApiKey'], STRIPE_SECRET_KEY);
-
     try {
-        $session = call_user_func(['Stripe\\Checkout\\Session', 'retrieve'], $sessionId);
+        $session = stripeApiRequest('GET', '/v1/checkout/sessions/' . rawurlencode($sessionId));
 
-        if ($session && $session->payment_status === 'paid') {
-            $orderId = $session->metadata->order_id ?? null;
+        if ($session && ($session['payment_status'] ?? '') === 'paid') {
+            $orderId = $session['metadata']['order_id'] ?? null;
             if ($orderId) {
                 $db = getDB();
                 $db->prepare("UPDATE orders SET status = 'paid', updated_at = NOW() WHERE id = ?")

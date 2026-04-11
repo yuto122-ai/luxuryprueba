@@ -44,13 +44,6 @@ cd $RemotePath
 git fetch origin
 git checkout master
 git reset --hard origin/master
-if [ ! -f vendor/autoload.php ]; then
-    if command -v composer >/dev/null 2>&1; then
-        composer install --no-interaction --no-dev --prefer-dist --optimize-autoloader
-    elif [ -d luxuryprueba-master ] && [ ! -f luxuryprueba-master/vendor/autoload.php ] && command -v composer >/dev/null 2>&1; then
-        (cd luxuryprueba-master && composer install --no-interaction --no-dev --prefer-dist --optimize-autoloader)
-    fi
-fi
 sed -i "/^define('DB_USER'/c\define('DB_USER', '$DbUser');" php/config.php
 sed -i "/^define('DB_PASS'/c\define('DB_PASS', '$DbPass');" php/config.php
 php -r "if(function_exists('opcache_reset')){opcache_reset(); echo 'OPCACHE_RESET\\n';}"
