@@ -20,12 +20,13 @@ function readStripeSecretValue(string $keyName): string {
     }
 
     $stripeEnvCandidates = [
+        dirname(__DIR__) . '/stripe.env',
         '/var/www/stripe.env',
         dirname(__DIR__, 2) . '/stripe.env',
     ];
 
     foreach ($stripeEnvCandidates as $candidate) {
-        if (!is_file($candidate)) {
+        if (!is_file($candidate) || !is_readable($candidate)) {
             continue;
         }
 
