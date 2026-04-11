@@ -16,6 +16,12 @@ if (!isset($_GET['session_id'])) {
         $vendorAutoload = __DIR__ . '/../vendor/autoload.php';
     }
     if (!file_exists($vendorAutoload)) {
+        $vendorAutoload = __DIR__ . '/luxuryprueba-master/vendor/autoload.php';
+    }
+    if (!file_exists($vendorAutoload)) {
+        $vendorAutoload = __DIR__ . '/../luxuryprueba-master/vendor/autoload.php';
+    }
+    if (!file_exists($vendorAutoload)) {
         die('Falta vendor/autoload.php. Ejecuta composer install.');
     }
     require_once $vendorAutoload;

@@ -4,6 +4,8 @@ require_once __DIR__ . '/../php/config.php';
 $autoloadCandidates = [
     __DIR__ . '/../vendor/autoload.php',
     __DIR__ . '/../../vendor/autoload.php',
+    __DIR__ . '/../luxuryprueba-master/vendor/autoload.php',
+    __DIR__ . '/../../luxuryprueba-master/vendor/autoload.php',
 ];
 
 $autoloadPath = null;
