@@ -418,6 +418,7 @@ window.open360Viewer = function(productId, saleMode) {
     if (!prod) { console.error('Producto no encontrado:', productId); return; }
     var mobileViewerCta = document.getElementById('mobile-viewer-cta');
     var mode = saleMode === 'wholesale' ? 'wholesale' : 'individual';
+    var currentImageSrc = prod.main_image ? 'uploads/products/' + prod.main_image : 'assets/placeholder.jpg';
 
     document.getElementById('viewer-title').textContent    = prod.name;
     document.getElementById('viewer-desc').textContent     = prod.description ? prod.description.substring(0,120)+'…' : '';
@@ -459,7 +460,7 @@ window.open360Viewer = function(productId, saleMode) {
         this.onerror = null;
         this.src = 'data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22900%22 height=%22640%22%3E%3Crect width=%22100%25%22 height=%22100%25%22 fill=%22%23111111%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 fill=%22%23888888%22 font-family=%22Arial%22 font-size=%2230%22%3EImagen no disponible%3C/text%3E%3C/svg%3E';
     };
-    imgEl.src = prod.main_image ? 'uploads/products/'+prod.main_image : 'assets/placeholder.jpg';
+    imgEl.src = currentImageSrc;
     imgEl.alt = prod.name;
 
     // ── Botones de talla ──────────────────────────────────────────────────────
@@ -559,7 +560,10 @@ window.open360Viewer = function(productId, saleMode) {
                     var image = this.dataset.image;
                     if (image) {
                         var nextSrc = getColorImageSrc(image);
-                        if (nextSrc) document.getElementById('viewer-image').src = nextSrc;
+                        if (nextSrc) {
+                            currentImageSrc = nextSrc;
+                            document.getElementById('viewer-image').src = nextSrc;
+                        }
                     }
                 };
             });
@@ -571,7 +575,10 @@ window.open360Viewer = function(productId, saleMode) {
             var firstImage = circles[0].dataset.image;
             if (firstImage) {
                 var firstSrc = getColorImageSrc(firstImage);
-                if (firstSrc) document.getElementById('viewer-image').src = firstSrc;
+                if (firstSrc) {
+                    currentImageSrc = firstSrc;
+                    document.getElementById('viewer-image').src = firstSrc;
+                }
             }
         }
     }, 10);
@@ -591,7 +598,7 @@ window.open360Viewer = function(productId, saleMode) {
             return;
         }
         var qty = mode === 'wholesale' ? (prod.min_wholesale_qty||1) : 1;
-        if (typeof addToCart==='function') addToCart(productId, parseInt(sel)||null, qty);
+        if (typeof addToCart==='function') addToCart(productId, parseInt(sel)||null, qty, { imagePath: currentImageSrc });
         window.close360Viewer();
     });
 

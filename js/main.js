@@ -273,12 +273,26 @@ document.addEventListener('DOMContentLoaded', () => {
     window.openCart = openCart;
     window.closeCart = closeCart;
 
-    window.addToCart = async function(productId, variantId, qty = 1) {
+    window.addToCart = async function(productId, variantId, qty = 1, options = {}) {
         try {
+            const payload = {
+                action: 'add',
+                product_id: productId,
+                variant_id: variantId,
+                quantity: qty,
+            };
+
+            if (options && typeof options === 'object') {
+                const imagePath = options.imagePath || options.image_path;
+                if (imagePath) {
+                    payload.image_path = imagePath;
+                }
+            }
+
             const res = await fetch('api/cart.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'add', product_id: productId, variant_id: variantId, quantity: qty })
+                body: JSON.stringify(payload)
             });
             const data = await res.json();
             if (data.success) {

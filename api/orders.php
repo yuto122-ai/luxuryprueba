@@ -176,63 +176,86 @@ try {
     // ── NÚMERO DE ORDEN ──────────────────────────────────────────────────────
     $orderNumber = generateOrderNumber();
 
-    // ── INSERTAR ORDEN ───────────────────────────────────────────────────────
-    // BUG 7+8 FIX: guarda subtotal, shipping, total, shipping_phone, order_type
-    $stmt = $db->prepare("
-        INSERT INTO orders
-            (user_id, order_number, order_type, status,
-             subtotal, shipping, total,
-             shipping_name, shipping_phone, shipping_address, notes,
-             telegram_sent)
-        VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, 0)
-    ");
-    $stmt->execute([
-        $userId,
-        $orderNumber,
-        $orderType,
-        $subtotal,
-        $shipping,
-        $total,
-        $name,
-        $phone,
-        $address,
-        $notes,
-    ]);
-    $orderId = $db->lastInsertId();
-
-    // ── INSERTAR ORDER_ITEMS ─────────────────────────────────────────────────
-    // BUG 6 FIX: se guardan los productos del pedido
     $productList = '';
-    foreach ($items as $item) {
-        $wholesalePrice = (float)($item['price_wholesale'] ?? 0);
-        $variantPrice = (float)($item['variant_price'] ?? 0);
-        if ($orderType === 'wholesale' && $wholesalePrice > 0) {
-            $price = $wholesalePrice;
-        } elseif ($variantPrice > 0) {
-            $price = $variantPrice;
-        } else {
-            $price = (float)($item['price_individual'] ?? $item['price_wholesale'] ?? 0);
-        }
-        $lineTotal = $price * $item['quantity'];
+    try {
+        $db->beginTransaction();
 
-        $db->prepare("
-            INSERT INTO order_items
-                (order_id, product_id, variant_id, product_name, size, quantity, unit_price, subtotal)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ")->execute([
-            $orderId,
-            $item['product_id'],
-            $item['variant_id'] ?? null,
-            $item['name'],
-            $item['size'] ?? null,
-            $item['quantity'],
-            $price,
-            $lineTotal,
+        // ── INSERTAR ORDEN ───────────────────────────────────────────────────
+        // BUG 7+8 FIX: guarda subtotal, shipping, total, shipping_phone, order_type
+        $stmt = $db->prepare("
+            INSERT INTO orders
+                (user_id, order_number, order_type, status,
+                 subtotal, shipping, total,
+                 shipping_name, shipping_phone, shipping_address, notes,
+                 telegram_sent)
+            VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, 0)
+        ");
+        $stmt->execute([
+            $userId,
+            $orderNumber,
+            $orderType,
+            $subtotal,
+            $shipping,
+            $total,
+            $name,
+            $phone,
+            $address,
+            $notes,
         ]);
+        $orderId = $db->lastInsertId();
 
-        $productList .= "• {$item['name']}"
-            . ($item['size'] ? " (Talla {$item['size']})" : '')
-            . " x{$item['quantity']} — $" . number_format($price, 2) . "\n";
+        // ── INSERTAR ORDER_ITEMS ─────────────────────────────────────────────
+        // BUG 6 FIX: se guardan los productos del pedido
+        foreach ($items as $item) {
+            $wholesalePrice = (float)($item['price_wholesale'] ?? 0);
+            $variantPrice = (float)($item['variant_price'] ?? 0);
+            if ($orderType === 'wholesale' && $wholesalePrice > 0) {
+                $price = $wholesalePrice;
+            } elseif ($variantPrice > 0) {
+                $price = $variantPrice;
+            } else {
+                $price = (float)($item['price_individual'] ?? $item['price_wholesale'] ?? 0);
+            }
+            $lineTotal = $price * $item['quantity'];
+
+            $db->prepare("
+                INSERT INTO order_items
+                    (order_id, product_id, variant_id, product_name, size, quantity, unit_price, subtotal)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ")->execute([
+                $orderId,
+                $item['product_id'],
+                $item['variant_id'] ?? null,
+                $item['name'],
+                $item['size'] ?? null,
+                $item['quantity'],
+                $price,
+                $lineTotal,
+            ]);
+
+            $productList .= "• {$item['name']}"
+                . ($item['size'] ? " (Talla {$item['size']})" : '')
+                . " x{$item['quantity']} — $" . number_format($price, 2) . "\n";
+        }
+
+        // ── LIMPIAR CARRITO ──────────────────────────────────────────────────
+        if ($userId) {
+            $db->prepare("DELETE FROM cart WHERE user_id = ?")->execute([$userId]);
+        } else {
+            $db->prepare("DELETE FROM cart WHERE session_id = ?")->execute([$sessionId]);
+        }
+
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+
+        respondJson([
+            'success' => false,
+            'message' => 'Error en el servidor',
+            'error'   => $e->getMessage(),
+        ]);
     }
 
     // ── MENSAJE TELEGRAM ─────────────────────────────────────────────────────
@@ -257,13 +280,6 @@ try {
             $db->prepare("UPDATE orders SET telegram_sent = 1 WHERE id = ?")->execute([$orderId]);
         }
     } catch (Exception $e) {}
-
-    // ── LIMPIAR CARRITO ──────────────────────────────────────────────────────
-    if ($userId) {
-        $db->prepare("DELETE FROM cart WHERE user_id = ?")->execute([$userId]);
-    } else {
-        $db->prepare("DELETE FROM cart WHERE session_id = ?")->execute([$sessionId]);
-    }
 
     $response = [
         'success'      => true,

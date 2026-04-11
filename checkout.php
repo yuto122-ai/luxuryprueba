@@ -326,6 +326,15 @@ let cartData = null;
 let isPlacingOrder = false;
 let orderTypeLocked = false;
 
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function setCheckoutStep(step) {
     const body = document.body;
     const shippingBtn = document.getElementById('step-btn-shipping');
@@ -513,8 +522,10 @@ async function placeOrder() {
                 mobileBtn.style.background = 'var(--green)';
             }
         } else {
-            document.getElementById('checkout-alert').innerHTML = `<div class="alert alert-error">${data.message}</div>`;
-            if (data.message.includes('Inicia sesión')) {
+            const messageText = data.message || 'Error al procesar el pedido';
+            const debugInfo = data.error ? `<br><small style="opacity:.8">${escapeHtml(data.error)}</small>` : '';
+            document.getElementById('checkout-alert').innerHTML = `<div class="alert alert-error">${escapeHtml(messageText)}${debugInfo}</div>`;
+            if (messageText.includes('Inicia sesión')) {
                 setTimeout(() => window.location.href = 'login', 2000);
             }
             btn.innerHTML = '<i class="fas fa-lock"></i> Confirmar Pedido';

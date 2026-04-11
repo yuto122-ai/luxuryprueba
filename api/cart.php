@@ -10,12 +10,23 @@ $db        = getDB();
 $sessionId = session_id();
 $userId    = $_SESSION['user_id'] ?? null;
 
+function normalizeCartImagePath(?string $raw): string {
+    if (!$raw) {
+        return '';
+    }
+
+    $path = trim($raw);
+    $path = preg_replace('/[\x00-\x1F\x7F]/', '', $path);
+    return substr($path, 0, 255);
+}
+
 function getCartItems($db, $userId, $sessionId) {
     if ($userId) {
         $stmt = $db->prepare("
             SELECT c.id, c.product_id, c.variant_id, c.quantity,
                                      p.name, p.material, p.price_individual, p.price_wholesale, p.min_wholesale_qty, p.sale_type,
                                          pv.size, pv.price AS variant_price, pv.price_individual AS variant_price_individual, pv.price_wholesale AS variant_price_wholesale,
+                   c.image_path AS cart_image,
                    (SELECT image_path FROM product_images
                     WHERE product_id = p.id AND is_main = 1 LIMIT 1) as image
             FROM cart c
@@ -29,6 +40,7 @@ function getCartItems($db, $userId, $sessionId) {
             SELECT c.id, c.product_id, c.variant_id, c.quantity,
                                      p.name, p.material, p.price_individual, p.price_wholesale, p.min_wholesale_qty, p.sale_type,
                                          pv.size, pv.price AS variant_price, pv.price_individual AS variant_price_individual, pv.price_wholesale AS variant_price_wholesale,
+                   c.image_path AS cart_image,
                    (SELECT image_path FROM product_images
                     WHERE product_id = p.id AND is_main = 1 LIMIT 1) as image
             FROM cart c
@@ -72,9 +84,13 @@ function getCartItems($db, $userId, $sessionId) {
             : ($item['material'] === 'polyester' ? 'Poliéster' : 'Mixto');
 
         // BUG 3 FIX: rutas relativas desde raíz del sitio (no '../')
-        $item['image'] = $item['image']
-            ? 'uploads/products/' . $item['image']
-            : 'assets/placeholder.jpg';
+        if (!empty($item['cart_image'])) {
+            $item['image'] = $item['cart_image'];
+        } else {
+            $item['image'] = $item['image']
+                ? 'uploads/products/' . $item['image']
+                : 'assets/placeholder.jpg';
+        }
     }
 
     return $items;
@@ -99,6 +115,8 @@ switch ($action) {
         $productId = (int)($input['product_id'] ?? 0);
         $variantId = (isset($input['variant_id']) && $input['variant_id'] !== null && $input['variant_id'] !== '' && $input['variant_id'] !== 'null') ? (int)$input['variant_id'] : null;
         $qty       = max(1, (int)($input['quantity'] ?? 1));
+        $imagePath = normalizeCartImagePath($input['image_path'] ?? null);
+        $imagePath = $imagePath !== '' ? $imagePath : null;
 
         if (!$productId) {
             echo json_encode(['success' => false, 'message' => 'Producto inválido']);
@@ -116,13 +134,15 @@ switch ($action) {
         if ($userId) {
             $check = $db->prepare("SELECT id, quantity FROM cart
                 WHERE user_id = ? AND product_id = ?
-                AND (variant_id = ? OR (variant_id IS NULL AND ? IS NULL))");
-            $check->execute([$userId, $productId, $variantId, $variantId]);
+                AND (variant_id = ? OR (variant_id IS NULL AND ? IS NULL))
+                AND ((image_path IS NULL AND ? IS NULL) OR image_path = ?)");
+            $check->execute([$userId, $productId, $variantId, $variantId, $imagePath, $imagePath]);
         } else {
             $check = $db->prepare("SELECT id, quantity FROM cart
                 WHERE session_id = ? AND product_id = ?
-                AND (variant_id = ? OR (variant_id IS NULL AND ? IS NULL))");
-            $check->execute([$sessionId, $productId, $variantId, $variantId]);
+                AND (variant_id = ? OR (variant_id IS NULL AND ? IS NULL))
+                AND ((image_path IS NULL AND ? IS NULL) OR image_path = ?)");
+            $check->execute([$sessionId, $productId, $variantId, $variantId, $imagePath, $imagePath]);
         }
         $existing = $check->fetch();
 
@@ -131,11 +151,11 @@ switch ($action) {
                ->execute([$qty, $existing['id']]);
         } else {
             if ($userId) {
-                $db->prepare("INSERT INTO cart (user_id, product_id, variant_id, quantity) VALUES (?,?,?,?)")
-                   ->execute([$userId, $productId, $variantId, $qty]);
+                $db->prepare("INSERT INTO cart (user_id, product_id, variant_id, image_path, quantity) VALUES (?,?,?,?,?)")
+                   ->execute([$userId, $productId, $variantId, $imagePath, $qty]);
             } else {
-                $db->prepare("INSERT INTO cart (session_id, product_id, variant_id, quantity) VALUES (?,?,?,?)")
-                   ->execute([$sessionId, $productId, $variantId, $qty]);
+                $db->prepare("INSERT INTO cart (session_id, product_id, variant_id, image_path, quantity) VALUES (?,?,?,?,?)")
+                   ->execute([$sessionId, $productId, $variantId, $imagePath, $qty]);
             }
         }
 
