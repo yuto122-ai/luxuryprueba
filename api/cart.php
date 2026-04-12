@@ -20,10 +20,19 @@ function normalizeCartImagePath(?string $raw): string {
     return substr($path, 0, 255);
 }
 
+function normalizeCartColorName(?string $raw): string {
+    if (!$raw) {
+        return '';
+    }
+    $name = trim($raw);
+    $name = preg_replace('/[\x00-\x1F\x7F]/', '', $name);
+    return substr($name, 0, 100);
+}
+
 function getCartItems($db, $userId, $sessionId) {
     if ($userId) {
         $stmt = $db->prepare("
-            SELECT c.id, c.product_id, c.variant_id, c.quantity,
+            SELECT c.id, c.product_id, c.variant_id, c.color_id, c.color_name, c.color_extra, c.quantity,
                                      p.name, p.material, p.price_individual, p.price_wholesale, p.min_wholesale_qty, p.sale_type,
                                          pv.size, pv.price AS variant_price, pv.price_individual AS variant_price_individual, pv.price_wholesale AS variant_price_wholesale,
                    c.image_path AS cart_image,
@@ -37,7 +46,7 @@ function getCartItems($db, $userId, $sessionId) {
         $stmt->execute([$userId]);
     } else {
         $stmt = $db->prepare("
-            SELECT c.id, c.product_id, c.variant_id, c.quantity,
+            SELECT c.id, c.product_id, c.variant_id, c.color_id, c.color_name, c.color_extra, c.quantity,
                                      p.name, p.material, p.price_individual, p.price_wholesale, p.min_wholesale_qty, p.sale_type,
                                          pv.size, pv.price AS variant_price, pv.price_individual AS variant_price_individual, pv.price_wholesale AS variant_price_wholesale,
                    c.image_path AS cart_image,
@@ -63,6 +72,7 @@ function getCartItems($db, $userId, $sessionId) {
         $variantWholesale  = (float)($item['variant_price_wholesale'] ?? $item['variant_price'] ?? 0);
         $baseIndividual = (float)($item['price_individual'] ?? 0);
         $baseWholesale  = (float)($item['price_wholesale'] ?? 0);
+        $colorExtra = (float)($item['color_extra'] ?? 0);
 
         if ($isWholesale) {
             if ($variantWholesale > 0) {
@@ -77,6 +87,8 @@ function getCartItems($db, $userId, $sessionId) {
                 $item['price'] = $baseIndividual > 0 ? $baseIndividual : $baseWholesale;
             }
         }
+
+        $item['price'] += $colorExtra;
 
         // BUG 4 FIX: material_label en español para mostrarse en el carrito
         $item['material_label'] = $item['material'] === 'cotton'
@@ -114,6 +126,10 @@ switch ($action) {
     case 'add':
         $productId = (int)($input['product_id'] ?? 0);
         $variantId = (isset($input['variant_id']) && $input['variant_id'] !== null && $input['variant_id'] !== '' && $input['variant_id'] !== 'null') ? (int)$input['variant_id'] : null;
+        $colorId = (isset($input['color_id']) && $input['color_id'] !== null && $input['color_id'] !== '' && $input['color_id'] !== 'null') ? (int)$input['color_id'] : null;
+        $colorName = normalizeCartColorName($input['color_name'] ?? null);
+        $colorName = $colorName !== '' ? $colorName : null;
+        $colorExtra = isset($input['color_extra']) ? (float)$input['color_extra'] : 0.0;
         $qty       = max(1, (int)($input['quantity'] ?? 1));
         $imagePath = normalizeCartImagePath($input['image_path'] ?? null);
         $imagePath = $imagePath !== '' ? $imagePath : null;
@@ -135,14 +151,16 @@ switch ($action) {
             $check = $db->prepare("SELECT id, quantity FROM cart
                 WHERE user_id = ? AND product_id = ?
                 AND (variant_id = ? OR (variant_id IS NULL AND ? IS NULL))
+                AND (color_id = ? OR (color_id IS NULL AND ? IS NULL))
                 AND ((image_path IS NULL AND ? IS NULL) OR image_path = ?)");
-            $check->execute([$userId, $productId, $variantId, $variantId, $imagePath, $imagePath]);
+            $check->execute([$userId, $productId, $variantId, $variantId, $colorId, $colorId, $imagePath, $imagePath]);
         } else {
             $check = $db->prepare("SELECT id, quantity FROM cart
                 WHERE session_id = ? AND product_id = ?
                 AND (variant_id = ? OR (variant_id IS NULL AND ? IS NULL))
+                AND (color_id = ? OR (color_id IS NULL AND ? IS NULL))
                 AND ((image_path IS NULL AND ? IS NULL) OR image_path = ?)");
-            $check->execute([$sessionId, $productId, $variantId, $variantId, $imagePath, $imagePath]);
+            $check->execute([$sessionId, $productId, $variantId, $variantId, $colorId, $colorId, $imagePath, $imagePath]);
         }
         $existing = $check->fetch();
 
@@ -151,11 +169,11 @@ switch ($action) {
                ->execute([$qty, $existing['id']]);
         } else {
             if ($userId) {
-                $db->prepare("INSERT INTO cart (user_id, product_id, variant_id, image_path, quantity) VALUES (?,?,?,?,?)")
-                   ->execute([$userId, $productId, $variantId, $imagePath, $qty]);
+                     $db->prepare("INSERT INTO cart (user_id, product_id, variant_id, color_id, color_name, color_extra, image_path, quantity) VALUES (?,?,?,?,?,?,?,?)")
+                         ->execute([$userId, $productId, $variantId, $colorId, $colorName, $colorExtra, $imagePath, $qty]);
             } else {
-                $db->prepare("INSERT INTO cart (session_id, product_id, variant_id, image_path, quantity) VALUES (?,?,?,?,?)")
-                   ->execute([$sessionId, $productId, $variantId, $imagePath, $qty]);
+                     $db->prepare("INSERT INTO cart (session_id, product_id, variant_id, color_id, color_name, color_extra, image_path, quantity) VALUES (?,?,?,?,?,?,?,?)")
+                         ->execute([$sessionId, $productId, $variantId, $colorId, $colorName, $colorExtra, $imagePath, $qty]);
             }
         }
 

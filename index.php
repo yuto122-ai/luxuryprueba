@@ -419,6 +419,8 @@ window.open360Viewer = function(productId, saleMode) {
     var mobileViewerCta = document.getElementById('mobile-viewer-cta');
     var mode = saleMode === 'wholesale' ? 'wholesale' : 'individual';
     var currentImageSrc = prod.main_image ? 'uploads/products/' + prod.main_image : 'assets/placeholder.jpg';
+    var selectedColorId = null;
+    var selectedColorName = '';
 
     document.getElementById('viewer-title').textContent    = prod.name;
     document.getElementById('viewer-desc').textContent     = prod.description ? prod.description.substring(0,120)+'…' : '';
@@ -539,7 +541,9 @@ window.open360Viewer = function(productId, saleMode) {
             var colorExtra = mode === 'wholesale'
                 ? parseFloat(c.extra_price_wholesale || c.extra_price || 0)
                 : parseFloat(c.extra_price_individual || c.extra_price || 0);
-            return '<div class="color-circle" data-extra="'+ colorExtra.toFixed(2) +'" data-image="'+ (c.image_path||'') +'" style="background:'+ c.hex +';'+ border +'"></div>';
+            var colorId = c.color_id || c.id || '';
+            var colorName = c.name || '';
+            return '<div class="color-circle" data-extra="'+ colorExtra.toFixed(2) +'" data-color-id="'+ colorId +'" data-color-name="'+ colorName.replace(/"/g, '&quot;') +'" data-image="'+ (c.image_path||'') +'" style="background:'+ c.hex +';'+ border +'"></div>';
         }).join('');
     }
 
@@ -555,6 +559,8 @@ window.open360Viewer = function(productId, saleMode) {
                     this.classList.add('active');
 
                     extraColor = parseFloat(this.dataset.extra || 0);
+                    selectedColorId = this.dataset.colorId ? parseInt(this.dataset.colorId, 10) : null;
+                    selectedColorName = this.dataset.colorName || '';
                     updateViewerPrice();
 
                     var image = this.dataset.image;
@@ -571,6 +577,8 @@ window.open360Viewer = function(productId, saleMode) {
             // set first color selected
             circles[0].classList.add('active');
             extraColor = parseFloat(circles[0].dataset.extra || 0);
+            selectedColorId = circles[0].dataset.colorId ? parseInt(circles[0].dataset.colorId, 10) : null;
+            selectedColorName = circles[0].dataset.colorName || '';
             updateViewerPrice();
             var firstImage = circles[0].dataset.image;
             if (firstImage) {
@@ -598,7 +606,12 @@ window.open360Viewer = function(productId, saleMode) {
             return;
         }
         var qty = mode === 'wholesale' ? (prod.min_wholesale_qty||1) : 1;
-        if (typeof addToCart==='function') addToCart(productId, parseInt(sel)||null, qty, { imagePath: currentImageSrc });
+        if (typeof addToCart==='function') addToCart(productId, parseInt(sel)||null, qty, {
+            imagePath: currentImageSrc,
+            colorId: selectedColorId,
+            colorName: selectedColorName,
+            colorExtra: extraColor
+        });
         window.close360Viewer();
     });
 

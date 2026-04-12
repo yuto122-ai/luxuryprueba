@@ -416,10 +416,11 @@ function renderSummary() {
         const wholesale = parseFloat(item.price_wholesale || 0);
         const variant = parseFloat(item.variant_price || 0);
         const individual = parseFloat(item.price_individual || 0);
+        const colorExtra = parseFloat(item.color_extra || 0);
 
-        if (orderType === 'wholesale' && wholesale > 0) return wholesale;
-        if (variant > 0) return variant;
-        if (individual > 0) return individual;
+        if (orderType === 'wholesale' && wholesale > 0) return wholesale + colorExtra;
+        if (variant > 0) return variant + colorExtra;
+        if (individual > 0) return individual + colorExtra;
         return parseFloat(item.price || 0);
     };
 
@@ -443,7 +444,7 @@ function renderSummary() {
                 <img src="${item.image}" style="width:50px;height:62px;object-fit:cover;background:var(--dark3)" alt="${item.name}">
                 <div>
                     <p style="font-size:.82rem">${item.name}</p>
-                    <p style="font-size:.68rem;color:var(--gray)">${item.size ? 'Talla ' + item.size : 'Única'} × ${item.quantity}</p>
+                    <p style="font-size:.68rem;color:var(--gray)">${item.size ? 'Talla ' + item.size : 'Única'}${item.color_name ? ' · ' + item.color_name : ''} × ${item.quantity}</p>
                 </div>
             </div>
             <span style="color:var(--gold);font-size:.9rem">$${lineTotal.toFixed(2)}</span>

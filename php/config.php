@@ -168,6 +168,15 @@ function ensureDatabaseCompatibility(PDO $pdo): void {
     if (tableExists($pdo, 'cart') && !columnExists($pdo, 'cart', 'image_path')) {
         $pdo->exec("ALTER TABLE cart ADD COLUMN image_path VARCHAR(255) NULL AFTER variant_id");
     }
+    if (tableExists($pdo, 'cart') && !columnExists($pdo, 'cart', 'color_id')) {
+        $pdo->exec("ALTER TABLE cart ADD COLUMN color_id INT NULL AFTER variant_id");
+    }
+    if (tableExists($pdo, 'cart') && !columnExists($pdo, 'cart', 'color_name')) {
+        $pdo->exec("ALTER TABLE cart ADD COLUMN color_name VARCHAR(100) NULL AFTER color_id");
+    }
+    if (tableExists($pdo, 'cart') && !columnExists($pdo, 'cart', 'color_extra')) {
+        $pdo->exec("ALTER TABLE cart ADD COLUMN color_extra DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER color_name");
+    }
 
     // Legacy products tables may miss color fields used by admin/product viewer.
     if (tableExists($pdo, 'products')) {

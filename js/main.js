@@ -287,6 +287,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (imagePath) {
                     payload.image_path = imagePath;
                 }
+                if (options.colorId !== undefined && options.colorId !== null && options.colorId !== '') {
+                    payload.color_id = options.colorId;
+                }
+                if (options.colorName) {
+                    payload.color_name = options.colorName;
+                }
+                if (options.colorExtra !== undefined && options.colorExtra !== null && options.colorExtra !== '') {
+                    payload.color_extra = options.colorExtra;
+                }
             }
 
             const res = await fetch('api/cart.php', {

@@ -117,6 +117,7 @@ try {
     foreach ($items as $item) {
         $wholesalePrice = (float)($item['price_wholesale'] ?? 0);
         $variantPrice = (float)($item['variant_price'] ?? 0);
+        $colorExtra = (float)($item['color_extra'] ?? 0);
         if ($orderType === 'wholesale' && $wholesalePrice > 0) {
             $price = $wholesalePrice;
         } elseif ($variantPrice > 0) {
@@ -124,6 +125,7 @@ try {
         } else {
             $price = (float)($item['price_individual'] ?? $item['price_wholesale'] ?? 0);
         }
+        $price += $colorExtra;
         $subtotal += $price * $item['quantity'];
     }
 
@@ -136,6 +138,8 @@ try {
         return implode(':', [
             (string)($item['product_id'] ?? ''),
             (string)($item['variant_id'] ?? ''),
+            (string)($item['color_id'] ?? ''),
+            (string)($item['color_extra'] ?? ''),
             (string)($item['quantity'] ?? ''),
         ]);
     }, $items);
@@ -209,6 +213,7 @@ try {
         foreach ($items as $item) {
             $wholesalePrice = (float)($item['price_wholesale'] ?? 0);
             $variantPrice = (float)($item['variant_price'] ?? 0);
+            $colorExtra = (float)($item['color_extra'] ?? 0);
             if ($orderType === 'wholesale' && $wholesalePrice > 0) {
                 $price = $wholesalePrice;
             } elseif ($variantPrice > 0) {
@@ -216,6 +221,7 @@ try {
             } else {
                 $price = (float)($item['price_individual'] ?? $item['price_wholesale'] ?? 0);
             }
+            $price += $colorExtra;
             $lineTotal = $price * $item['quantity'];
 
             $db->prepare("

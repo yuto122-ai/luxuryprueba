@@ -95,6 +95,7 @@ try {
     foreach ($items as $item) {
         $wholesalePrice = (float)($item['price_wholesale'] ?? 0);
         $variantPrice = (float)($item['variant_price'] ?? 0);
+        $colorExtra = (float)($item['color_extra'] ?? 0);
         if ($orderType === 'wholesale' && $wholesalePrice > 0) {
             $price = $wholesalePrice;
         } elseif ($variantPrice > 0) {
@@ -102,6 +103,8 @@ try {
         } else {
             $price = (float)($item['price_individual'] ?? 0);
         }
+
+        $price += $colorExtra;
 
         $subtotal += $price * (int)$item['quantity'];
         $lineItems[] = [
@@ -151,6 +154,7 @@ try {
     foreach ($items as $item) {
         $wholesalePrice = (float)($item['price_wholesale'] ?? 0);
         $variantPrice = (float)($item['variant_price'] ?? 0);
+        $colorExtra = (float)($item['color_extra'] ?? 0);
         if ($orderType === 'wholesale' && $wholesalePrice > 0) {
             $price = $wholesalePrice;
         } elseif ($variantPrice > 0) {
@@ -158,6 +162,7 @@ try {
         } else {
             $price = (float)($item['price_individual'] ?? 0);
         }
+        $price += $colorExtra;
         $lineTotal = $price * (int)$item['quantity'];
 
         $db->prepare("INSERT INTO order_items (order_id, product_id, variant_id, product_name, size, quantity, unit_price, subtotal)
